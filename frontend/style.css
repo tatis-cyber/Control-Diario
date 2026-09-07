@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Diario</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <header>
+        <h1>Control Diario</h1>
+        <p>Organiza y registra tus actividades</p>
+    </header>
+
+    <main>
+        <section class="formulario">
+            <h2>Nueva actividad</h2>
+
+            <input type="text" id="actividad" placeholder="Escribe una actividad">
+
+            <select id="prioridad">
+                <option value="Baja">Prioridad baja</option>
+                <option value="Media">Prioridad media</option>
+                <option value="Alta">Prioridad alta</option>
+            </select>
+
+            <button id="btnAgregar">Agregar actividad</button>
+        </section>
+
+        <section class="actividades">
+            <h2>Mis actividades</h2>
+
+            <div id="listaActividades">
+                <p>No hay actividades registradas.</p>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
