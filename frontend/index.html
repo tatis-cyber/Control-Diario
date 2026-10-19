@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title> 😶‍🌫️ Control Diario</title>
+  <link rel="stylesheet" href="style.css?v=29">
+</head>
+
+<body>
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-header">
+        <h2>Control Diario</h2>
+        <p>Inicia sesión para continuar</p>
+      </div>
+
+      <form id="loginForm">
+        <label for="username">Usuario</label>
+        <input type="text" id="username" placeholder="usuario" required>
+
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" placeholder="Ingresa tu contraseña" required>
+
+        <button type="submit" class="login-btn">Ingresar</button>
+        <p class="login-help">Prueba: usuario / usuario123</p>
+        <p id="loginError" class="login-error" aria-live="polite"></p>
+        <button type="button" id="mostrarRecuperacion" class="text-link">¿Olvidaste tu contraseña?</button>
+      </form>
+
+      <button type="button" id="mostrarRegistro" class="register-link">Crear una cuenta</button>
+
+      <form id="registroForm" class="register-form hidden">
+        <div class="register-divider">Nuevo usuario</div>
+
+        <label for="registroUsuario">Usuario</label>
+        <input type="text" id="registroUsuario" placeholder="Elige un usuario" minlength="3" required>
+
+        <label for="registroCorreo">Correo electrónico</label>
+        <input type="email" id="registroCorreo" placeholder="nombre@correo.com" required>
+
+        <label for="registroPassword">Contraseña</label>
+        <input type="password" id="registroPassword" placeholder="Crea una contraseña" minlength="6" required>
+
+        <label for="confirmarPassword">Confirmar contraseña</label>
+        <input type="password" id="confirmarPassword" placeholder="Repite tu contraseña" minlength="6" required>
+
+        <button type="submit" class="login-btn register-btn">Registrarme</button>
+        <p id="registroError" class="login-error" aria-live="polite"></p>
+      </form>
+
+      <form id="recuperacionForm" class="register-form recovery-form hidden">
+        <div class="register-divider">Recuperar contraseña</div>
+        <p class="form-description">Escribe el correo con el que te registraste.</p>
+
+        <label for="recuperacionCorreo">Correo electrónico</label>
+        <input type="email" id="recuperacionCorreo" placeholder="nombre@correo.com" required>
+
+        <label for="nuevaPassword">Nueva contraseña</label>
+        <input type="password" id="nuevaPassword" placeholder="Crea una nueva contraseña" minlength="6" required>
+
+        <label for="confirmarNuevaPassword">Confirmar nueva contraseña</label>
+        <input type="password" id="confirmarNuevaPassword" placeholder="Repite tu contraseña" minlength="6" required>
+
+        <button type="submit" class="login-btn recovery-btn">Actualizar contraseña</button>
+        <p id="recuperacionError" class="login-error" aria-live="polite"></p>
+        <button type="button" id="volverLoginRecuperacion" class="text-link">Volver a iniciar sesión</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-layout hidden" id="appLayout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <h2>Control Diario</h2>
+      </div>
+
+      <nav class="sidebar-menu" aria-label="Menú principal">
+        <button class="menu-item active" data-target="dashboard">📊 Dashboard</button>
+        <button class="menu-item" data-target="actividades">🗂️ Actividades</button>
+        <button class="menu-item" data-target="programacion">📅 Programación</button>
+        <button class="menu-item" data-target="tecnicos">👨‍💻 Técnicos</button>
+        <button class="menu-item" data-target="clientes">🧑‍🤝‍🧑 Clientes</button>
+        <button class="menu-item" data-target="sedes">📍 Sedes</button>
+        <button class="menu-item" data-target="aliados">🤝 Aliados</button>
+        <button class="menu-item" data-target="notificaciones">🔔 Notificaciones <span id="contadorNotificaciones" class="contador-notificaciones">0</span></button>
+        <button class="menu-item" data-target="reportes">📈 Reportes</button>
+        <button class="menu-item" data-target="historial">🕘 Historial</button>
+        <button class="menu-item" data-target="usuarios">👥 Usuarios</button>
+        <button class="menu-item" data-target="configuracion">⚙️ Configuración</button>
+      </nav>
+
+      <div class="profile-box">
+        <div class="profile-avatar" id="profileAvatar">U</div>
+        <div class="profile-info">
+          <strong id="profileName">Usuario</strong>
+          <span id="profileRole">Perfil activo</span>
+        </div>
+        <button id="logoutBtn" class="logout-btn" type="button">Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <section class="module-panel active" data-module-panel="dashboard">
+        <div class="encabezado">
+          <h1>🗓️ Control Diario</h1>
+          <h3>Resumen general del día.</h3>
+        </div>
+
+        <div class="filtros">
+          <button id="filtro-activos" data-filtro="todos">Activos</button>
+          <button id="filtro-pendientes" data-filtro="pendientes">Pendientes</button>
+          <button id="filtro-en-proceso" data-filtro="en-proceso">En Proceso</button>
+          <button id="filtro-terminadas" data-filtro="terminadas">Terminadas</button>
+        </div>
+
+        <section class="resumen" aria-label="Resumen de Actividades">
+          <div class="resumen-item resumen-total">
+            <span>Activos</span>
+            <strong id="total">0</strong>
+          </div>
+
+          <div class="resumen-item resumen-pendientes">
+            <span>Pendientes</span>
+            <strong id="pendientes">0</strong>
+          </div>
+
+          <div class="resumen-item resumen-proceso">
+            <span>En proceso</span>
+            <strong id="en-proceso">0</strong>
+          </div>
+
+          <div class="resumen-item resumen-terminadas">
+            <span>Terminadas</span>
+            <strong id="terminadas">0</strong>
+          </div>
+        </section>
+
+        <section class="dashboard-overview" aria-label="Estadísticas y pendientes">
+          <div class="progress-card">
+            <div class="overview-heading">
+              <div>
+                <span class="overview-kicker">Avance del día</span>
+                <h2>Actividades completadas</h2>
+              </div>
+              <strong id="porcentajeCompletado">0%</strong>
+            </div>
+            <div class="progress-track" aria-hidden="true">
+              <div id="barraProgreso" class="progress-value"></div>
+            </div>
+            <p id="resumenProgreso">Aún no hay actividades registradas.</p>
+          </div>
+
+          <div class="pending-card">
+            <div class="overview-heading">
+              <div>
+                <span class="overview-kicker">Seguimiento</span>
+                <h2>Pendientes</h2>
+              </div>
+              <span class="pending-badge" id="badgePendientes">0</span>
+            </div>
+            <ul id="dashboardPendientes" class="dashboard-pending-list"></ul>
+          </div>
+        </section>
+
+        <section class="dashboard-schedule" aria-label="Próximas actividades">
+          <div class="overview-heading">
+            <div>
+              <span class="overview-kicker">Organización</span>
+              <h2>Próximas actividades</h2>
+            </div>
+            <button id="irProgramacion" class="dashboard-link" type="button">Ver agenda →</button>
+          </div>
+          <ul id="dashboardProgramacion" class="dashboard-schedule-list"></ul>
+          <p id="sinDashboardProgramacion" class="dashboard-empty">No hay actividades programadas.</p>
+        </section>
+      </section>
+
+      <section class="module-panel" data-module-panel="actividades">
+        <div class="encabezado">
+          <h1>🗂️ Actividades</h1>
+          <h3>Organiza y registra tus actividades del día.</h3>
+        </div>
+
+        <div id="formularioActividad" class="card">
+          <div id="modoEdicionActividad" class="modo-edicion hidden" aria-live="polite">
+            <strong>Editando actividad</strong>
+            <span>Modifica los campos y presiona “Guardar cambios”.</span>
+          </div>
+          <div class="fila-actividad">
+            <input type="text" id="actividad" placeholder="Escribe una Actividad">
+            <button id="agregar"> ➕ Agregar Actividad</button>
+          </div>
+
+          <div class="fila-selectores">
+            <div class="fila-tecnico">
+              <label for="abrirTecnicos">Técnico:</label>
+              <div class="selector-tecnicos">
+                <button type="button" id="abrirTecnicos" class="selector-tecnicos-btn" aria-expanded="false">
+                  Selecciona uno o varios técnicos
+                </button>
+                <div id="opcionesTecnicos" class="opciones-tecnicos" hidden></div>
+              </div>
+            </div>
+            <div class="fila-tecnico">
+              <label for="abrirSedes">Sede:</label>
+              <div class="selector-tecnicos">
+                <button type="button" id="abrirSedes" class="selector-tecnicos-btn" aria-expanded="false">
+                  Selecciona una sede
+                </button>
+                <div id="opcionesSedes" class="opciones-tecnicos" hidden></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fila-selectores">
+            <div class="fila-tecnico">
+              <label for="abrirClientes">Cliente:</label>
+              <div class="selector-tecnicos">
+                <button type="button" id="abrirClientes" class="selector-tecnicos-btn" aria-expanded="false">
+                  Selecciona un cliente
+                </button>
+                <div id="opcionesClientes" class="opciones-tecnicos" hidden></div>
+              </div>
+            </div>
+            <div class="fila-tecnico">
+              <label for="abrirAliados">Aliado:</label>
+              <div class="selector-tecnicos">
+                <button type="button" id="abrirAliados" class="selector-tecnicos-btn" aria-expanded="false">
+                  Selecciona un aliado
+                </button>
+                <div id="opcionesAliados" class="opciones-tecnicos" hidden></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fila-fecha">
+            <input type="date" id="fecha">
+            <input type="time" id="hora" aria-label="Hora de la actividad">
+            <select id="estadoEdicion" aria-label="Estado de la actividad">
+              <option value="pendiente">Pendiente</option>
+              <option value="procesando">En proceso</option>
+              <option value="terminada">Terminada</option>
+            </select>
+          </div>
+
+          <div class="fila-observaciones">
+            <label for="observacionesActividad">Observaciones:</label>
+            <textarea id="observacionesActividad" placeholder="Escriba alguna observación"></textarea>
+          </div>
+
+          <div class="acciones-formulario-actividad">
+            <button id="cancelarEdicion" class="cancelar-edicion hidden" type="button">Cancelar edición</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="encabezado-lista-actividades">
+            <h2>🫣 Mis Actividades</h2>
+            <span id="contadorActividades" class="contador-actividades">0 actividades</span>
+          </div>
+          <div class="filtros-actividades" aria-label="Buscar y filtrar actividades">
+            <input type="search" id="buscarActividad" placeholder="Buscar actividad, cliente o técnico..." aria-label="Buscar actividades">
+            <select id="filtroEstadoActividad" aria-label="Filtrar por estado">
+              <option value="todos">Todos los estados</option>
+              <option value="pendiente">Pendientes</option>
+              <option value="procesando">En proceso</option>
+              <option value="terminada">Terminadas</option>
+            </select>
+            <input type="date" id="filtroFechaActividad" aria-label="Filtrar por fecha">
+            <button type="button" id="limpiarFiltrosActividad">Limpiar filtros</button>
+          </div>
+          <ul id="lista"></ul>
+          <p id="sinResultadosActividades" class="sin-resultados hidden">No hay actividades que coincidan con los filtros.</p>
+        </div>
+      </section>
+
+      <section class="module-panel" data-module-panel="tecnicos">
+        <div class="encabezado">
+          <h1>👨‍💻 Técnicos</h1>
+          <h3>Administra los técnicos del equipo.</h3>
+        </div>
+
+        <div class="card">
+          <div class="formulario-tecnico">
+            <div class="campo-tecnico">
+              <label for="tecnico">Nombre completo</label>
+              <input type="text" id="tecnico" placeholder="Nombre del técnico" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="documentoTecnico">Documento</label>
+              <input type="text" id="documentoTecnico" placeholder="Número de documento" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="telefonoTecnico">Teléfono</label>
+              <input type="tel" id="telefonoTecnico" placeholder="Teléfono" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="correoTecnico">Correo</label>
+              <input type="email" id="correoTecnico" placeholder="correo@ejemplo.com" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="estadoTecnico">Estado</label>
+              <select id="estadoTecnico">
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
+            <button id="agregartecnico" type="button">➕ Agregar Técnico</button>
+          </div>
+          <ul id="lista-tecnicos"></ul>
+        </div>
+      </section>
+
+      <section class="module-panel" data-module-panel="clientes">
+        <div class="encabezado">
+          <h1>🧑‍🤝‍🧑 Clientes</h1>
+          <h3>Gestiona la base de clientes.</h3>
+        </div>
+
+        <div class="card">
+          <div class="formulario-tecnico">
+            <div class="campo-tecnico">
+              <label for="cliente">Nombre del cliente</label>
+              <input type="text" id="cliente" placeholder="Nombre o razón social" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="documentoCliente">NIT o documento (opcional)</label>
+              <input type="text" id="documentoCliente" placeholder="NIT o documento">
+            </div>
+            <div class="campo-tecnico">
+              <label for="telefonoCliente">Teléfono (opcional)</label>
+              <input type="tel" id="telefonoCliente" placeholder="Teléfono">
+            </div>
+            <div class="campo-tecnico">
+              <label for="correoCliente">Correo</label>
+              <input type="email" id="correoCliente" placeholder="correo@ejemplo.com" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="estadoCliente">Estado</label>
+              <select id="estadoCliente">
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
+            <button id="agregarcliente" type="button">➕ Agregar Cliente</button>
+          </div>
+          <ul id="lista-clientes"></ul>
+        </div>
+      </section>
+
+      <section class="module-panel" data-module-panel="sedes">
+        <div class="encabezado">
+          <h1>📍 Sedes</h1>
+          <h3>Registra y organiza las sedes.</h3>
+        </div>
+
+        <div class="card">
+          <div class="formulario-tecnico">
+            <div class="campo-tecnico">
+              <label for="sede">Nombre de la sede</label>
+              <input type="text" id="sede" placeholder="Nombre de la sede" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="clienteSede">Cliente registrado</label>
+              <select id="clienteSede" required>
+                <option value="">Selecciona un cliente</option>
+              </select>
+            </div>
+            <div class="campo-tecnico">
+              <label for="direccionSede">Dirección</label>
+              <input type="text" id="direccionSede" placeholder="Dirección de la sede" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="ciudadSede">Ciudad</label>
+              <input type="text" id="ciudadSede" placeholder="Ciudad" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="estadoSede">Estado</label>
+              <select id="estadoSede">
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
+            <button id="agregarsede" type="button">➕ Agregar Sede</button>
+          </div>
+          <ul id="lista-sedes"></ul>
+        </div>
+      </section>
+
+      <section class="module-panel" data-module-panel="aliados">
+        <div class="encabezado">
+          <h1>🤝 Aliados</h1>
+          <h3>Controla tus aliados y socios.</h3>
+        </div>
+
+        <div class="card">
+          <div class="formulario-tecnico">
+            <div class="campo-tecnico">
+              <label for="aliado">Nombre del aliado</label>
+              <input type="text" id="aliado" placeholder="Nombre o razón social" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="documentoAliado">NIT o documento</label>
+              <input type="text" id="documentoAliado" placeholder="NIT o documento" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="telefonoAliado">Teléfono</label>
+              <input type="tel" id="telefonoAliado" placeholder="Teléfono" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="correoAliado">Correo</label>
+              <input type="email" id="correoAliado" placeholder="correo@ejemplo.com" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="estadoAliado">Estado</label>
+              <select id="estadoAliado">
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
+            <button id="agregarAliado" type="button">➕ Agregar Aliado</button>
+          </div>
+          <ul id="lista-aliados"></ul>
+        </div>
+      </section>
+
+      <section class="module-panel" data-module-panel="programacion">
+        <div class="encabezado">
+          <h1>📅 Programación</h1>
+          <h3>Organiza actividades, responsables y fechas de ejecución.</h3>
+        </div>
+
+        <div id="formularioProgramacion" class="card">
+          <div class="formulario-programacion">
+            <div class="campo-tecnico">
+              <label for="fechaInicioProgramacion">Fecha inicio</label>
+              <input type="date" id="fechaInicioProgramacion" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="fechaFinProgramacion">Fecha fin</label>
+              <input type="date" id="fechaFinProgramacion" required>
+            </div>
+            <div class="campo-tecnico">
+              <label for="tecnicoProgramacion">Técnico</label>
+              <select id="tecnicoProgramacion" required>
+                <option value="">Selecciona un técnico</option>
+              </select>
+            </div>
+            <div class="campo-tecnico">
+              <label for="clienteProgramacion">Cliente</label>
+              <select id="clienteProgramacion" required>
+                <option value="">Selecciona un cliente</option>
+              </select>
+            </div>
+            <div class="campo-tecnico">
+              <label for="sedeProgramacion">Sede</label>
+              <select id="sedeProgramacion" required>
+                <option value="">Selecciona una sede</option>
+              </select>
+            </div>
+            <div class="campo-tecnico">
+              <label for="actividadProgramacion">Actividad</label>
+              <select id="actividadProgramacion" required>
+                <option value="">Selecciona una actividad</option>
+              </select>
+            </div>
+            <div class="campo-tecnico">
+              <label for="estadoProgramacion">Estado</label>
+              <select id="estadoProgramacion">
+                <option value="programada">Programada</option>
+                <option value="en-proceso">En proceso</option>
+                <option value="terminada">Terminada</option>
+                <option value="cancelada">Cancelada</option>
+              </select>
+            </div>
+            <div class="campo-tecnico campo-programacion-observaciones">
+              <label for="observacionesProgramacion">Observaciones</label>
+              <textarea id="observacionesProgramacion" placeholder="Agrega observaciones de la programación"></textarea>
+            </div>
+            <button id="agregarProgramacion" type="button">➕ Agregar programación</button>
+            <button id="cancelarEdicionProgramacion" class="cancelar-edicion hidden" type="button">Cancelar edición</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="encabezado-lista-actividades">
+            <h2>Agenda de actividades</h2>
+            <span id="contadorProgramacion" class="contador-actividades">0 programaciones</span>
+          </div>
+          <ul id="listaProgramacion" class="lista-programacion"></ul>
+          <p id="sinProgramacion" class="sin-resultados">No hay programaciones registradas.</p>
+        </div>
+      </section>
+
+      <section class="module-panel" data-module-panel="configuracion">
+
+  <div class="encabezado config-encabezado">
+    <h1>⚙️ Configuración</h1>
+    <p>Administra la información general y las preferencias de Control Diario.</p>
+  </div>
+
+  <div class="configuracion-contenedor">
+
+    <div class="config-card">
+      <div class="config-card-titulo">
+        <div class="config-icono">🏢</div>
+
+        <div>
+          <h3>Información de la Empresa</h3>
+          <p>Datos principales utilizados por el sistema.</p>
+        </div>
+      </div>
+
+      <div class="config-formulario">
+
+        <div class="config-campo">
+          <label for="empresaNombre">Nombre de la empresa</label>
+          <input 
+            id="empresaNombre" 
+            type="text" 
+            placeholder="Ej. Atempi Seguridad">
+        </div>
+
+        <div class="config-campo">
+          <label for="empresaDocumento">NIT o documento</label>
+          <input 
+            id="empresaDocumento" 
+            type="text" 
+            placeholder="Documento">
+        </div>
+
+        <div class="config-campo">
+          <label for="empresaCorreo">Correo electrónico</label>
+          <input 
+            id="empresaCorreo" 
+            type="email" 
+            placeholder="correo@empresa.com">
+        </div>
+
+        <div class="config-campo">
+          <label for="empresaTelefono">Teléfono</label>
+          <input 
+            id="empresaTelefono" 
+            type="tel" 
+            placeholder="Número de contacto">
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="config-card">
+
+      <div class="config-card-titulo">
+        <div class="config-icono">⚙️</div>
+
+        <div>
+          <h3>Preferencias del sistema</h3>
+          <p>Configura las opciones generales.</p>
+        </div>
+      </div>
+
+
+      <div class="config-opcion">
+        <div>
+          <strong>Notificaciones</strong>
+          <p>Activar avisos del sistema.</p>
+        </div>
+
+        <input type="checkbox" id="notificacionesActivadas" checked>
+      </div>
+
+
+      <div class="config-opcion">
+        <div>
+          <strong>Recordar filtros</strong>
+          <p>Guardar filtros usados recientemente.</p>
+        </div>
+
+        <input type="checkbox" id="recordarFiltros" checked>
+      </div>
+
+    </div>
+
+
+    <div class="config-card">
+
+      <div class="config-card-titulo">
+        <div class="config-icono">🎨</div>
+
+        <div>
+          <h3>Apariencia</h3>
+          <p>Personaliza la visualización.</p>
+        </div>
+      </div>
+
+
+      <div class="config-campo">
+
+        <label for="configVista">
+          Vista del sistema
+        </label>
+
+       <select id="configVista">
+  <option value="normal">Vista normal</option>
+  <option value="compacta">Vista compacta</option>
+</select>
+
+</div>
+
+<div class="config-campo">
+  <label for="configEstado">
+    Estado del sistema
+  </label>
+
+  <select id="configEstado">
+    <option value="activo">Activo</option>
+    <option value="mantenimiento">Mantenimiento</option>
+  </select>
+</div>
+   
+
+    </div>
+
+
+    <div class="config-acciones">
+
+      <button 
+        id="guardarConfiguracion" 
+        type="button">
+        💾 Guardar configuración
+      </button>
+
+
+      <button 
+        id="restablecerConfiguracion" 
+        type="button">
+        ↩️ Restablecer
+      </button>
+
+    </div>
+
+
+    <p id="estadoConfiguracion"></p>
+
+  </div>
+
+</section>
+      <section class="module-panel" data-module-panel="usuarios">
+        <div class="encabezado"><h1>👥 Usuarios</h1><h3>Administra nombres, accesos, roles y estados.</h3></div>
+        <div class="card">
+          <div class="filtros-usuarios">
+            <input id="buscarUsuario" type="search" placeholder="Buscar por nombre o correo..." aria-label="Buscar usuarios">
+            <button id="buscarUsuarioBtn" type="button">🔎 Buscar</button>
+          </div>
+          <div id="formularioUsuarios" class="formulario-usuarios-modal">
+            <div id="modoEdicionUsuario" class="modo-edicion hidden" aria-live="polite">
+              <strong>Editando usuario</strong>
+              <span>Modifica los datos y guarda los cambios.</span>
+            </div>
+            <div class="formulario-tecnico">
+            <div class="campo-tecnico"><label for="usuarioNombre">Nombre de usuario</label><input id="usuarioNombre" type="text" required></div>
+            <div class="campo-tecnico"><label for="usuarioCorreo">Correo</label><input id="usuarioCorreo" type="email" required></div>
+            <div class="campo-tecnico"><label for="usuarioRol">Rol</label><select id="usuarioRol"><option value="administrador">Administrador</option><option value="supervisor">Supervisor</option><option value="tecnico">Técnico</option></select></div>
+            <div class="campo-tecnico"><label for="usuarioEstado">Estado</label><select id="usuarioEstado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
+            <div class="campo-tecnico"><label for="usuarioPassword">Contraseña inicial</label><input id="usuarioPassword" type="password" minlength="6"></div>
+            <button id="guardarUsuario" type="button">➕ Agregar usuario</button>
+            <button id="cancelarEdicionUsuario" class="cancelar-edicion hidden" type="button">Cancelar edición</button>
+            </div>
+          </div>
+          <p id="estadoUsuarios" class="form-status" aria-live="polite"></p>
+          <ul id="listaUsuarios" class="lista-gestion"></ul>
+        </div>
+      </section>
+
+      <section class="module-panel" data-module-panel="reportes">
+        <div class="encabezado"><h1>📈 Reportes</h1><h3>Consulta actividades por estado, técnico, cliente y fecha.</h3></div>
+        <div class="card">
+          <div class="filtros-reporte">
+            <input id="reporteFechaInicio" type="date" aria-label="Fecha inicial del reporte">
+            <input id="reporteFechaFin" type="date" aria-label="Fecha final del reporte">
+            <select id="reporteTecnico"><option value="todos">Todos los técnicos</option></select>
+            <select id="reporteCliente"><option value="todos">Todos los clientes</option></select>
+            <button id="generarReporte" type="button">🔎 Generar reporte</button>
+            <button id="exportarReporte" class="btn-exportar-reporte" type="button">📥 Exportar CSV</button>
+          </div>
+          <div id="resumenReporte" class="resumen-reporte"></div>
+          <div class="tabla-reporte-contenedor">
+            <table class="tabla-reporte">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Actividad</th>
+                  <th>Técnico(s)</th>
+                  <th>Cliente</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="listaReporte"></tbody>
+            </table>
+            <p id="sinResultadosReporte" class="sin-resultados hidden">No hay actividades para los filtros seleccionados.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="module-panel" data-module-panel="notificaciones">
+        <div class="encabezado"><h1>🔔 Notificaciones</h1><h3>Seguimiento de próximas actividades y programaciones.</h3></div>
+        <div class="card"><ul id="listaNotificaciones" class="lista-notificaciones"></ul><p id="sinNotificaciones" class="sin-resultados">No hay notificaciones.</p></div>
+      </section>
+
+      <section class="module-panel" data-module-panel="historial">
+        <div class="encabezado"><h1>🕘 Historial</h1><h3>Registro de fechas, actividades, técnicos y estados.</h3></div>
+        <div class="card">
+          <div class="filtros-reporte">
+            <input id="historialFecha" type="date" aria-label="Filtrar historial por fecha">
+            <select id="historialTecnico" aria-label="Filtrar historial por técnico"><option value="todos">Todos los técnicos</option></select>
+            <select id="historialCliente" aria-label="Filtrar historial por cliente"><option value="todos">Todos los clientes</option></select>
+            <select id="historialEstado" aria-label="Filtrar historial por estado">
+              <option value="todos">Todos los estados</option>
+              <option value="creada">Actividad creada</option>
+              <option value="programada">Programada</option>
+              <option value="procesando">En proceso</option>
+              <option value="terminada">Terminada</option>
+            </select>
+           
+          </div>
+          <div class="tabla-reporte-contenedor">
+            <table class="tabla-reporte tabla-historial">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Actividad</th>
+                  <th>Técnico(s)</th>
+                  <th>Cliente</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="listaHistorial"></tbody>
+            </table>
+            <p id="sinResultadosHistorial" class="sin-resultados hidden">No hay actividades para los filtros seleccionados.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="overlayEdicion" class="overlay-edicion hidden" aria-hidden="true"></div>
+
+  <script src="app.js?v=32"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,2617 @@
+const API_URL = "https://reimagined-broccoli-x5q7qx747r75f6556-8000.app.github.dev/api";
+const loginScreen = document.getElementById("loginScreen");
+const appLayout = document.getElementById("appLayout");
+const loginForm = document.getElementById("loginForm");
+const usernameInput = document.getElementById("username");
+const passwordInput = document.getElementById("password");
+const loginError = document.getElementById("loginError");
+const logoutBtn = document.getElementById("logoutBtn");
+const mostrarRegistroBtn = document.getElementById("mostrarRegistro");
+const registroForm = document.getElementById("registroForm");
+const registroUsuarioInput = document.getElementById("registroUsuario");
+const registroPasswordInput = document.getElementById("registroPassword");
+const confirmarPasswordInput = document.getElementById("confirmarPassword");
+const registroError = document.getElementById("registroError");
+const mostrarRecuperacionBtn = document.getElementById("mostrarRecuperacion");
+const recuperacionForm = document.getElementById("recuperacionForm");
+const recuperacionCorreoInput = document.getElementById("recuperacionCorreo");
+const nuevaPasswordInput = document.getElementById("nuevaPassword");
+const confirmarNuevaPasswordInput = document.getElementById("confirmarNuevaPassword");
+const recuperacionError = document.getElementById("recuperacionError");
+const volverLoginRecuperacionBtn = document.getElementById("volverLoginRecuperacion");
+
+const usuariosIniciales = {
+  usuario: { name: "Usuario", password: "usuario123", email: "usuario@demo.com", role: "administrador", status: "activo" },
+  administrador: { name: "Administrador", password: "usuario123", email: "admin@demo.com", role: "administrador", status: "activo" }
+};
+
+const permisosPorRol = {
+  administrador: {
+    etiqueta: "Administrador",
+    modulos: ["dashboard", "actividades", "programacion", "tecnicos", "clientes", "sedes", "aliados", "notificaciones", "reportes", "historial", "usuarios", "configuracion"],
+    administrarUsuarios: true,
+    administrarCatalogos: true,
+    administrarActividades: true,
+    actualizarEstados: true,
+    administrarProgramacion: true
+  },
+  supervisor: {
+    etiqueta: "Supervisor",
+    modulos: ["dashboard", "actividades", "programacion", "tecnicos", "notificaciones", "reportes", "historial"],
+    administrarUsuarios: false,
+    administrarCatalogos: false,
+    administrarActividades: false,
+    actualizarEstados: true,
+    administrarProgramacion: false
+  },
+  tecnico: {
+    etiqueta: "Técnico",
+    modulos: ["dashboard", "actividades", "programacion", "notificaciones"],
+    administrarUsuarios: false,
+    administrarCatalogos: false,
+    administrarActividades: false,
+    actualizarEstados: false,
+    administrarProgramacion: false
+  }
+};
+
+function normalizarRol(rol) {
+  if (rol === "admin") return "administrador";
+  if (rol === "user") return "tecnico";
+  return permisosPorRol[rol] ? rol : "tecnico";
+}
+
+function obtenerPermisosActuales() {
+  const usuarioActual = obtenerUsuarioActual();
+  const cuentaActual = usuarioActual ? obtenerUsuarios()[usuarioActual.username] : null;
+  const rol = cuentaActual?.role || usuarioActual?.role;
+  return permisosPorRol[normalizarRol(rol)] || permisosPorRol.tecnico;
+}
+
+function obtenerUsuarios() {
+  try {
+    const usuariosGuardados = JSON.parse(localStorage.getItem("controlDiarioUsuarios"));
+    const usuarios = usuariosGuardados && typeof usuariosGuardados === "object"
+      ? { ...usuariosIniciales, ...usuariosGuardados }
+      : { ...usuariosIniciales };
+    return Object.fromEntries(Object.entries(usuarios).map(([usuario, cuenta]) => {
+      const rolAnterior = cuenta.role;
+      const rol = rolAnterior === "user" && ["usuario", "administrador"].includes(usuario)
+        ? "administrador"
+        : normalizarRol(rolAnterior);
+      return [usuario, { ...cuenta, role: rol, status: cuenta.status || "activo" }];
+    }));
+  } catch (error) {
+    return { ...usuariosIniciales };
+  }
+}
+
+function guardarUsuarios(usuarios) {
+  localStorage.setItem("controlDiarioUsuarios", JSON.stringify(usuarios));
+}
+
+function obtenerUsuarioActual() {
+  try {
+    const usuario = JSON.parse(localStorage.getItem("controlDiarioUsuario"));
+    return usuario && usuario.username ? usuario : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function guardarUsuarioActual(usuario) {
+  localStorage.setItem("controlDiarioUsuario", JSON.stringify(usuario));
+}
+
+function cerrarSesion() {
+  localStorage.removeItem("controlDiarioUsuario");
+  loginScreen.classList.remove("hidden");
+  appLayout.classList.add("hidden");
+  usernameInput.value = "";
+  passwordInput.value = "";
+  loginError.textContent = "";
+  usernameInput.focus();
+}
+
+function mostrarAppSegunRol() {
+  const usuarioActual = obtenerUsuarioActual();
+
+  if (!usuarioActual) {
+    cerrarSesion();
+    return;
+  }
+
+  loginScreen.classList.add("hidden");
+  appLayout.classList.remove("hidden");
+
+  const cuentaActual = obtenerUsuarios()[usuarioActual.username];
+  const rolActual = cuentaActual?.role || usuarioActual.role;
+  const permisos = permisosPorRol[normalizarRol(rolActual)] || permisosPorRol.tecnico;
+  guardarUsuarioActual({ ...usuarioActual, role: normalizarRol(rolActual) });
+  const nombreBase = cuentaActual?.name || usuarioActual.username;
+  const nombreMostrar = nombreBase.charAt(0).toUpperCase() + nombreBase.slice(1);
+  document.getElementById("profileName").textContent = nombreMostrar;
+  document.getElementById("profileAvatar").textContent = usuarioActual.username.charAt(0).toUpperCase();
+  document.getElementById("profileRole").textContent = permisos.etiqueta;
+
+  document.querySelectorAll(".menu-item").forEach((boton) => {
+    const target = boton.dataset.target;
+    if (!target) return;
+    boton.style.display = permisos.modulos.includes(target) ? "block" : "none";
+  });
+
+  document.querySelectorAll(".module-panel").forEach((panel) => {
+    const target = panel.dataset.modulePanel;
+    panel.classList.toggle("active", target === "dashboard" && permisos.modulos.includes(target));
+  });
+  formularioActividad.classList.toggle("hidden", !permisos.administrarActividades);
+  formularioProgramacion.classList.toggle("hidden", !permisos.administrarProgramacion && !programacionEnEdicion);
+  guardarUsuarioBtn.disabled = !permisos.administrarUsuarios;
+  aplicarPermisosControles();
+}
+
+function aplicarPermisosControles() {
+  const permisos = obtenerPermisosActuales();
+  lista.querySelectorAll(".estadoBtn").forEach((boton) => { boton.disabled = !permisos.actualizarEstados; });
+  lista.querySelectorAll(".editar, .eliminar").forEach((boton) => { boton.style.display = permisos.administrarActividades ? "" : "none"; });
+  listaProgramacion.querySelectorAll(".editar-programacion, .eliminar-programacion").forEach((boton) => {
+    boton.style.display = permisos.administrarProgramacion ? "" : "none";
+  });
+}
+
+loginForm.addEventListener("submit", (evento) => {
+  evento.preventDefault();
+
+  const usuario = usernameInput.value.trim().toLowerCase();
+  const password = passwordInput.value.trim();
+  const usuarios = obtenerUsuarios();
+  const cuenta = usuarios[usuario] || usuarios[usuario === "admin" ? "administrador" : usuario];
+
+  if (!cuenta || cuenta.password !== password || cuenta.status === "inactivo") {
+    loginError.textContent = "Usuario o contraseña incorrectos. Prueba: usuario / usuario123";
+    return;
+  }
+
+  const nombreUsuario = usuario === "admin" ? "administrador" : usuario;
+  guardarUsuarioActual({ username: nombreUsuario, role: normalizarRol(cuenta.role) });
+  loginError.textContent = "";
+  mostrarAppSegunRol();
+});
+
+mostrarRegistroBtn.addEventListener("click", () => {
+  const registroVisible = !registroForm.classList.contains("hidden");
+  registroForm.classList.toggle("hidden", registroVisible);
+  recuperacionForm.classList.add("hidden");
+  loginForm.classList.toggle("hidden", !registroVisible);
+  mostrarRecuperacionBtn.classList.remove("hidden");
+  mostrarRegistroBtn.textContent = registroVisible ? "Crear una cuenta" : "Volver a ingresar";
+  loginError.textContent = "";
+  registroError.textContent = "";
+  recuperacionError.textContent = "";
+  if (!registroVisible) registroUsuarioInput.focus();
+});
+
+
+registroForm.addEventListener("submit", (evento) => {
+  evento.preventDefault();
+
+  const usuario = registroUsuarioInput.value.trim().toLowerCase();
+  const correo = document.getElementById("registroCorreo").value.trim().toLowerCase();
+  const password = registroPasswordInput.value;
+  const confirmarPassword = confirmarPasswordInput.value;
+  const usuarios = obtenerUsuarios();
+
+  if (usuarios[usuario]) {
+    registroError.textContent = "Ese usuario ya existe.";
+    return;
+  }
+
+  if (Object.values(usuarios).some((cuenta) => cuenta.email === correo)) {
+    registroError.textContent = "Ese correo ya está registrado.";
+    return;
+  }
+
+  if (password !== confirmarPassword) {
+    registroError.textContent = "Las contraseñas no coinciden.";
+    return;
+  }
+
+  usuarios[usuario] = { name: usuario, password, email: correo, role: "tecnico", status: "activo" };
+  guardarUsuarios(usuarios);
+  registroForm.reset();
+  registroForm.classList.add("hidden");
+  loginForm.classList.remove("hidden");
+  mostrarRegistroBtn.textContent = "Crear una cuenta";
+  registroError.textContent = "";
+  loginError.textContent = "Cuenta creada. Presiona Ingresar.";
+  usernameInput.value = "";
+  passwordInput.value = "";
+  usernameInput.focus();
+});
+
+mostrarRecuperacionBtn.addEventListener("click", () => {
+  loginForm.classList.add("hidden");
+  registroForm.classList.add("hidden");
+  recuperacionForm.classList.remove("hidden");
+  mostrarRegistroBtn.classList.add("hidden");
+  recuperacionError.textContent = "";
+  recuperacionCorreoInput.focus();
+});
+
+volverLoginRecuperacionBtn.addEventListener("click", () => {
+  recuperacionForm.classList.add("hidden");
+  loginForm.classList.remove("hidden");
+  mostrarRegistroBtn.classList.remove("hidden");
+  mostrarRegistroBtn.textContent = "Crear una cuenta";
+  recuperacionError.textContent = "";
+  usernameInput.focus();
+});
+
+recuperacionForm.addEventListener("submit", (evento) => {
+  evento.preventDefault();
+
+  const correo = recuperacionCorreoInput.value.trim().toLowerCase();
+  const nuevaPassword = nuevaPasswordInput.value;
+  const confirmarNuevaPassword = confirmarNuevaPasswordInput.value;
+  const usuarios = obtenerUsuarios();
+  const usuarioEncontrado = Object.entries(usuarios).find(([, cuenta]) => cuenta.email === correo);
+
+  if (!usuarioEncontrado) {
+    recuperacionError.textContent = "No encontramos una cuenta con ese correo.";
+    return;
+  }
+
+  if (nuevaPassword !== confirmarNuevaPassword) {
+    recuperacionError.textContent = "Las contraseñas no coinciden.";
+    return;
+  }
+
+  const [usuario] = usuarioEncontrado;
+  usuarios[usuario].password = nuevaPassword;
+  guardarUsuarios(usuarios);
+  recuperacionForm.reset();
+  recuperacionForm.classList.add("hidden");
+  loginForm.classList.remove("hidden");
+  mostrarRegistroBtn.classList.remove("hidden");
+  mostrarRegistroBtn.textContent = "Crear una cuenta";
+  usernameInput.value = "";
+  passwordInput.value = "";
+  loginError.textContent = "Contraseña actualizada. Ya puedes ingresar.";
+  usernameInput.focus();
+});
+
+logoutBtn.addEventListener("click", cerrarSesion);
+
+const actividadInput = document.getElementById("actividad");
+const fechaInput = document.getElementById("fecha");
+const horaInput = document.getElementById("hora");
+const estadoEdicionInput = document.getElementById("estadoEdicion");
+const agregarBtn = document.getElementById("agregar");
+const lista = document.getElementById("lista");
+const buscarActividadInput = document.getElementById("buscarActividad");
+const filtroEstadoActividad = document.getElementById("filtroEstadoActividad");
+const filtroFechaActividad = document.getElementById("filtroFechaActividad");
+const limpiarFiltrosActividadBtn = document.getElementById("limpiarFiltrosActividad");
+const cancelarEdicionBtn = document.getElementById("cancelarEdicion");
+const contadorActividades = document.getElementById("contadorActividades");
+const sinResultadosActividades = document.getElementById("sinResultadosActividades");
+const listaProgramacion = document.getElementById("listaProgramacion");
+const contadorProgramacion = document.getElementById("contadorProgramacion");
+const sinProgramacion = document.getElementById("sinProgramacion");
+const dashboardProgramacion = document.getElementById("dashboardProgramacion");
+const sinDashboardProgramacion = document.getElementById("sinDashboardProgramacion");
+const irProgramacionBtn = document.getElementById("irProgramacion");
+const fechaInicioProgramacionInput = document.getElementById("fechaInicioProgramacion");
+const fechaFinProgramacionInput = document.getElementById("fechaFinProgramacion");
+const tecnicoProgramacionInput = document.getElementById("tecnicoProgramacion");
+const clienteProgramacionInput = document.getElementById("clienteProgramacion");
+const sedeProgramacionInput = document.getElementById("sedeProgramacion");
+const actividadProgramacionInput = document.getElementById("actividadProgramacion");
+const observacionesProgramacionInput = document.getElementById("observacionesProgramacion");
+const estadoProgramacionInput = document.getElementById("estadoProgramacion");
+const agregarProgramacionBtn = document.getElementById("agregarProgramacion");
+const cancelarEdicionProgramacionBtn = document.getElementById("cancelarEdicionProgramacion");
+const formularioProgramacion = document.getElementById("formularioProgramacion");
+const modoEdicionActividad = document.getElementById("modoEdicionActividad");
+const formularioActividad = document.getElementById("formularioActividad");
+const overlayEdicion = document.getElementById("overlayEdicion");
+const empresaNombreInput = document.getElementById("empresaNombre");
+const empresaDocumentoInput = document.getElementById("empresaDocumento");
+const empresaCorreoInput = document.getElementById("empresaCorreo");
+const empresaTelefonoInput = document.getElementById("empresaTelefono");
+const configEstadoInput = document.getElementById("configEstado");
+const configVistaInput = document.getElementById("configVista");
+const notificacionesActivadasInput = document.getElementById("notificacionesActivadas");
+const recordarFiltrosInput = document.getElementById("recordarFiltros");
+const guardarConfiguracionBtn = document.getElementById("guardarConfiguracion");
+const estadoConfiguracion = document.getElementById("estadoConfiguracion");
+const usuarioNombreInput = document.getElementById("usuarioNombre");
+const usuarioCorreoInput = document.getElementById("usuarioCorreo");
+const usuarioRolInput = document.getElementById("usuarioRol");
+const usuarioEstadoInput = document.getElementById("usuarioEstado");
+const usuarioPasswordInput = document.getElementById("usuarioPassword");
+const guardarUsuarioBtn = document.getElementById("guardarUsuario");
+const cancelarEdicionUsuarioBtn = document.getElementById("cancelarEdicionUsuario");
+const formularioUsuarios = document.getElementById("formularioUsuarios");
+const modoEdicionUsuario = document.getElementById("modoEdicionUsuario");
+const estadoUsuarios = document.getElementById("estadoUsuarios");
+const listaUsuarios = document.getElementById("listaUsuarios");
+const buscarUsuarioInput = document.getElementById("buscarUsuario");
+const buscarUsuarioBtn = document.getElementById("buscarUsuarioBtn");
+const reporteFechaInicioInput = document.getElementById("reporteFechaInicio");
+const reporteFechaFinInput = document.getElementById("reporteFechaFin");
+const reporteTecnicoInput = document.getElementById("reporteTecnico");
+const reporteClienteInput = document.getElementById("reporteCliente");
+const generarReporteBtn = document.getElementById("generarReporte");
+const exportarReporteBtn = document.getElementById("exportarReporte");
+const resumenReporte = document.getElementById("resumenReporte");
+const listaReporte = document.getElementById("listaReporte");
+const sinResultadosReporte = document.getElementById("sinResultadosReporte");
+const listaNotificaciones = document.getElementById("listaNotificaciones");
+const sinNotificaciones = document.getElementById("sinNotificaciones");
+const contadorNotificaciones = document.getElementById("contadorNotificaciones");
+const historialFechaInput = document.getElementById("historialFecha");
+const historialTecnicoInput = document.getElementById("historialTecnico");
+const historialClienteInput = document.getElementById("historialCliente");
+const historialEstadoInput = document.getElementById("historialEstado");
+const listaHistorial = document.getElementById("listaHistorial");
+const sinResultadosHistorial = document.getElementById("sinResultadosHistorial");
+let actividadEnEdicion = null;
+let programacionEnEdicion = null;
+let filtroDashboard = "todos";
+
+
+const filtros = document.querySelectorAll(".filtros button");
+const tecnicoinput = document.getElementById("tecnico");
+const documentoTecnicoInput = document.getElementById("documentoTecnico");
+const telefonoTecnicoInput = document.getElementById("telefonoTecnico");
+const correoTecnicoInput = document.getElementById("correoTecnico");
+const estadoTecnicoInput = document.getElementById("estadoTecnico");
+const agregarTecnicoBtn = document.getElementById("agregartecnico");
+const listaTecnicos = document.getElementById("lista-tecnicos");
+const abrirTecnicosBtn = document.getElementById("abrirTecnicos");
+const opcionesTecnicos = document.getElementById("opcionesTecnicos");
+const abrirClientesBtn = document.getElementById("abrirClientes");
+const opcionesClientes = document.getElementById("opcionesClientes");
+let clienteSeleccionado = "";
+const abrirSedesBtn = document.getElementById("abrirSedes");
+const opcionesSedes = document.getElementById("opcionesSedes");
+let sedeSeleccionada = "";
+const abrirAliadosBtn = document.getElementById("abrirAliados");
+const opcionesAliados = document.getElementById("opcionesAliados");
+let aliadoSeleccionado = "";
+const clienteInput = document.getElementById("cliente");
+const documentoClienteInput = document.getElementById("documentoCliente");
+const telefonoClienteInput = document.getElementById("telefonoCliente");
+const correoClienteInput = document.getElementById("correoCliente");
+const estadoClienteInput = document.getElementById("estadoCliente");
+const agregarClienteBtn = document.getElementById("agregarcliente");
+const listaClientes = document.getElementById("lista-clientes");
+const sedeInput = document.getElementById("sede");
+const clienteSedeInput = document.getElementById("clienteSede");
+const direccionSedeInput = document.getElementById("direccionSede");
+const ciudadSedeInput = document.getElementById("ciudadSede");
+const estadoSedeInput = document.getElementById("estadoSede");
+const agregarSedeBtn = document.getElementById("agregarsede");
+const listaSedes = document.getElementById("lista-sedes");
+const aliadoInput = document.getElementById("aliado");
+const documentoAliadoInput = document.getElementById("documentoAliado");
+const telefonoAliadoInput = document.getElementById("telefonoAliado");
+const correoAliadoInput = document.getElementById("correoAliado");
+const estadoAliadoInput = document.getElementById("estadoAliado");
+const agregarAliado = document.getElementById("agregarAliado");
+const listaAliado = document.getElementById("lista-aliados");
+const observacionesActividad = document.getElementById("observacionesActividad");
+
+const clasesEstado = {
+  pendientes: "pendiente",
+  "en-proceso": "procesando",
+  terminadas: "terminada"
+};
+
+function obtenerActividades() {
+  try {
+    const actividades = JSON.parse(localStorage.getItem("actividades"));
+    return Array.isArray(actividades) ? actividades : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function guardarActividades() {
+  const actividades = [...lista.querySelectorAll("li")].map((actividad) => ({
+    texto: actividad.querySelector(".texto-actividad")?.textContent || "",
+    fecha: actividad.dataset.fecha || "",
+    hora: actividad.dataset.hora || "",
+    estado: actividad.querySelector(".estado")?.className.split(" ")[1] || "pendiente",
+    tecnicos: actividad.dataset.tecnicos || "",
+    cliente: actividad.dataset.cliente || "",
+    sede: actividad.dataset.sede || "",
+    aliado: actividad.dataset.aliado || "",
+    observaciones: actividad.dataset.observaciones || ""
+  }));
+
+  try {
+    localStorage.setItem("actividades", JSON.stringify(actividades));
+    renderizarProgramacion();
+    renderizarNotificaciones();
+    renderizarHistorial();
+    aplicarPermisosControles();
+  } catch (error) {
+    alert("No se pudieron guardar las actividades en este navegador.");
+  }
+}
+
+function restablecerFormularioActividad() {
+  actividadInput.value = "";
+  fechaInput.value = "";
+  horaInput.value = "";
+  estadoEdicionInput.value = "pendiente";
+  observacionesActividad.value = "";
+  clienteSeleccionado = "";
+  sedeSeleccionada = "";
+  aliadoSeleccionado = "";
+  abrirClientesBtn.textContent = "Selecciona un cliente";
+  abrirSedesBtn.textContent = "Selecciona una sede";
+  abrirAliadosBtn.textContent = "Selecciona un aliado";
+  opcionesTecnicos.querySelectorAll("input").forEach((opcion) => { opcion.checked = false; });
+  actualizarTextoSelector();
+}
+
+function cancelarEdicion() {
+  actividadEnEdicion = null;
+  restablecerFormularioActividad();
+  agregarBtn.textContent = "➕ Agregar Actividad";
+  cancelarEdicionBtn.classList.add("hidden");
+  modoEdicionActividad.classList.add("hidden");
+  formularioActividad.classList.remove("modal-edicion");
+  overlayEdicion.classList.add("hidden");
+  overlayEdicion.setAttribute("aria-hidden", "true");
+}
+
+function aplicarFiltrosActividades() {
+  const busqueda = buscarActividadInput.value.trim().toLowerCase();
+  const estadoFiltro = filtroEstadoActividad.value;
+  const fechaFiltro = filtroFechaActividad.value;
+  let visibles = 0;
+
+  lista.querySelectorAll("li").forEach((actividad) => {
+    const contenido = actividad.textContent.toLowerCase();
+    const estado = actividad.querySelector(".estado")?.classList[1] || "";
+    const coincide = (!busqueda || contenido.includes(busqueda))
+      && (estadoFiltro === "todos" || estado === estadoFiltro)
+      && (filtroDashboard === "todos" || estado === clasesEstado[filtroDashboard])
+      && (!fechaFiltro || actividad.dataset.fecha === fechaFiltro);
+    actividad.style.display = coincide ? "flex" : "none";
+    if (coincide) visibles++;
+  });
+
+
+  const total = lista.querySelectorAll("li").length;
+  contadorActividades.textContent = `${visibles} de ${total} actividad${total === 1 ? "" : "es"}`;
+  sinResultadosActividades.classList.toggle("hidden", visibles > 0 || total === 0);
+}
+
+function obtenerProgramaciones() {
+  try {
+    const programaciones = JSON.parse(localStorage.getItem("programaciones"));
+    return Array.isArray(programaciones) ? programaciones : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function guardarProgramaciones(programaciones) {
+  localStorage.setItem("programaciones", JSON.stringify(programaciones));
+  renderizarNotificaciones();
+  renderizarHistorial();
+}
+
+function mismaProgramacion(primera, segunda) {
+  return ["fechaInicio", "fechaFin", "tecnico", "cliente", "sede", "actividad", "observaciones", "estado"]
+    .every((campo) => (primera[campo] || "") === (segunda[campo] || ""));
+}
+
+function cancelarEdicionProgramacion() {
+  programacionEnEdicion = null;
+  formularioProgramacion.classList.remove("modal-edicion");
+  formularioProgramacion.querySelectorAll("input, select, textarea").forEach((campo) => { campo.disabled = false; });
+  overlayEdicion.classList.add("hidden");
+  overlayEdicion.setAttribute("aria-hidden", "true");
+  fechaInicioProgramacionInput.value = "";
+  fechaFinProgramacionInput.value = "";
+  tecnicoProgramacionInput.value = "";
+  clienteProgramacionInput.value = "";
+  sedeProgramacionInput.value = "";
+  actividadProgramacionInput.value = "";
+  observacionesProgramacionInput.value = "";
+  estadoProgramacionInput.value = "programada";
+  agregarProgramacionBtn.textContent = "➕ Agregar programación";
+  agregarProgramacionBtn.classList.remove("hidden");
+  cancelarEdicionProgramacionBtn.classList.add("hidden");
+}
+
+function iniciarEdicionProgramacion(programacion) {
+  document.querySelector('.menu-item[data-target="programacion"]')?.click();
+  actualizarOpcionesProgramacion();
+  programacionEnEdicion = programacion;
+  const puedeEditar = obtenerPermisosActuales().administrarProgramacion;
+  formularioProgramacion.classList.remove("hidden");
+  formularioProgramacion.classList.add("modal-edicion");
+  overlayEdicion.classList.remove("hidden");
+  overlayEdicion.setAttribute("aria-hidden", "false");
+  fechaInicioProgramacionInput.value = programacion.fechaInicio || "";
+  fechaFinProgramacionInput.value = programacion.fechaFin || "";
+  tecnicoProgramacionInput.value = programacion.tecnico || "";
+  clienteProgramacionInput.value = programacion.cliente || "";
+  sedeProgramacionInput.value = programacion.sede || "";
+  actividadProgramacionInput.value = programacion.actividad || "";
+  observacionesProgramacionInput.value = programacion.observaciones || "";
+  estadoProgramacionInput.value = programacion.estado || "programada";
+  agregarProgramacionBtn.textContent = "💾 Guardar programación";
+  agregarProgramacionBtn.classList.toggle("hidden", !puedeEditar);
+  cancelarEdicionProgramacionBtn.classList.toggle("hidden", !puedeEditar);
+  formularioProgramacion.querySelectorAll("input, select, textarea").forEach((campo) => { campo.disabled = !puedeEditar; });
+  fechaInicioProgramacionInput.focus();
+}
+
+function actualizarOpcionesProgramacion() {
+  const catalogos = [
+    [tecnicoProgramacionInput, obtenerTecnicos(), "Selecciona un técnico"],
+    [clienteProgramacionInput, obtenerClientes(), "Selecciona un cliente"],
+    [sedeProgramacionInput, obtenerSedes(), "Selecciona una sede"]
+  ];
+
+  catalogos.forEach(([selector, registros, textoVacio]) => {
+    const valorActual = selector.value;
+    selector.innerHTML = "";
+    const opcionVacia = document.createElement("option");
+    opcionVacia.value = "";
+    opcionVacia.textContent = textoVacio;
+    selector.append(opcionVacia);
+    registros.filter((registro) => (registro.estado || "activo") === "activo").forEach((registro) => {
+      const opcion = document.createElement("option");
+      opcion.value = registro.nombre;
+      opcion.textContent = registro.nombre;
+      selector.append(opcion);
+    });
+    if ([...selector.options].some((opcion) => opcion.value === valorActual)) selector.value = valorActual;
+  });
+
+  const actividadActual = actividadProgramacionInput.value;
+  actividadProgramacionInput.innerHTML = "";
+  const opcionVacia = document.createElement("option");
+  opcionVacia.value = "";
+  opcionVacia.textContent = "Selecciona una actividad";
+  actividadProgramacionInput.append(opcionVacia);
+  obtenerActividades().forEach((actividad) => {
+    const opcion = document.createElement("option");
+    opcion.value = actividad.texto;
+    opcion.textContent = actividad.texto;
+    actividadProgramacionInput.append(opcion);
+  });
+  if ([...actividadProgramacionInput.options].some((opcion) => opcion.value === actividadActual)) {
+    actividadProgramacionInput.value = actividadActual;
+  }
+}
+
+function renderizarProgramacion() {
+  const programaciones = obtenerProgramaciones().sort((primera, segunda) =>
+    `${primera.fechaInicio}T${primera.fechaFin}`.localeCompare(`${segunda.fechaInicio}T${segunda.fechaFin}`));
+
+  actualizarOpcionesProgramacion();
+  listaProgramacion.innerHTML = "";
+  contadorProgramacion.textContent = `${programaciones.length} programacion${programaciones.length === 1 ? "" : "es"}`;
+  sinProgramacion.classList.toggle("hidden", programaciones.length > 0);
+
+  programaciones.forEach((programacion, indice) => {
+    const elemento = document.createElement("li");
+    elemento.className = `programacion-${programacion.estado || "programada"}`;
+    const contenido = document.createElement("div");
+    contenido.className = "contenido-programacion";
+    const titulo = document.createElement("strong");
+    titulo.textContent = programacion.actividad;
+    const informacion = document.createElement("div");
+    informacion.className = "informacion-programacion";
+    const fecha = document.createElement("span");
+    fecha.className = "programacion-fecha";
+    fecha.textContent = `📅 ${programacion.fechaInicio} al ${programacion.fechaFin}`;
+    const tecnico = document.createElement("span");
+    tecnico.className = "programacion-tecnico";
+    tecnico.textContent = `👤 ${programacion.tecnico}`;
+    const cliente = document.createElement("span");
+    cliente.className = "programacion-cliente";
+    cliente.textContent = `🏢 ${programacion.cliente}`;
+    const sede = document.createElement("span");
+    sede.className = "programacion-sede";
+    sede.textContent = `📍 ${programacion.sede}`;
+    const observaciones = document.createElement("small");
+    observaciones.className = "programacion-observaciones";
+    observaciones.textContent = `📝 ${programacion.observaciones || "Sin observaciones"}`;
+    informacion.append(fecha, tecnico, cliente, sede, observaciones);
+    contenido.append(titulo);
+    elemento.append(contenido, informacion);
+    const acciones = document.createElement("div");
+    acciones.className = "acciones-programacion";
+    const estado = document.createElement("span");
+    estado.className = `estado-programacion ${programacion.estado || "programada"}`;
+    estado.textContent = (programacion.estado || "programada").replace("-", " ");
+    const editar = document.createElement("button");
+    editar.type = "button";
+    editar.className = "editar-programacion";
+    editar.textContent = "✏️ Editar";
+    editar.addEventListener("click", () => iniciarEdicionProgramacion(programacion));
+    const eliminar = document.createElement("button");
+    eliminar.type = "button";
+    eliminar.className = "eliminar-programacion";
+    eliminar.textContent = "🗑️";
+    eliminar.title = "Eliminar programación";
+    eliminar.addEventListener("click", () => {
+      const actuales = obtenerProgramaciones();
+      const indiceReal = actuales.findIndex((actual) => mismaProgramacion(actual, programacion));
+      if (indiceReal >= 0) actuales.splice(indiceReal, 1);
+      guardarProgramaciones(actuales);
+      renderizarProgramacion();
+    });
+    acciones.append(estado, editar, eliminar);
+    elemento.append(acciones);
+    listaProgramacion.append(elemento);
+  });
+
+  renderizarResumenProgramacion(programaciones);
+  aplicarPermisosControles();
+}
+
+function renderizarResumenProgramacion(programaciones = obtenerProgramaciones()) {
+  const programadas = programaciones.slice(0, 3);
+
+  dashboardProgramacion.innerHTML = "";
+  sinDashboardProgramacion.classList.toggle("hidden", programadas.length > 0);
+  programadas.forEach((programacion) => {
+    const elemento = document.createElement("li");
+    const contenido = document.createElement("div");
+    contenido.className = "dashboard-programacion-contenido";
+    const titulo = document.createElement("strong");
+    titulo.textContent = programacion.actividad;
+    const fecha = document.createElement("span");
+    fecha.className = "programacion-fecha";
+    fecha.textContent = `📅 ${programacion.fechaInicio} al ${programacion.fechaFin}`;
+    const tecnico = document.createElement("span");
+    tecnico.className = "programacion-tecnico";
+    tecnico.textContent = `👤 ${programacion.tecnico}`;
+    contenido.append(titulo, fecha, tecnico);
+
+    const informacion = document.createElement("div");
+    informacion.className = "dashboard-programacion-informacion";
+    const cliente = document.createElement("span");
+    cliente.className = "programacion-cliente";
+    cliente.textContent = `🏢 ${programacion.cliente}`;
+    const sede = document.createElement("span");
+    sede.className = "programacion-sede";
+    sede.textContent = `📍 ${programacion.sede}`;
+    const estado = document.createElement("span");
+    estado.className = `estado-programacion ${programacion.estado || "programada"}`;
+    estado.textContent = (programacion.estado || "programada").replace("-", " ");
+    informacion.append(cliente, sede, estado);
+    elemento.append(contenido, informacion);
+    dashboardProgramacion.append(elemento);
+  });
+}
+
+function obtenerConfiguracion() {
+  try {
+    return JSON.parse(localStorage.getItem("controlDiarioConfiguracion")) || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function cargarConfiguracion() {
+  const configuracion = obtenerConfiguracion();
+  empresaNombreInput.value = configuracion.empresaNombre || "";
+  empresaDocumentoInput.value = configuracion.empresaDocumento || "";
+  empresaCorreoInput.value = configuracion.empresaCorreo || "";
+  empresaTelefonoInput.value = configuracion.empresaTelefono || "";
+  configEstadoInput.value = configuracion.estado || "activo";
+  configVistaInput.value = configuracion.vista || "dashboard";
+
+
+  notificacionesActivadasInput.checked = configuracion.notificaciones !== false;
+  recordarFiltrosInput.checked = configuracion.recordarFiltros === true;
+}
+
+function renderizarUsuarios() {
+  const usuarios = obtenerUsuarios();
+  const busqueda = buscarUsuarioInput.value.trim().toLowerCase();
+  const permisos = obtenerPermisosActuales();
+  listaUsuarios.innerHTML = "";
+  Object.entries(usuarios).forEach(([usuario, cuenta]) => {
+    const rol = normalizarRol(cuenta.role);
+    const etiquetaRol = permisosPorRol[rol].etiqueta;
+    const contenidoBusqueda = `${cuenta.name || usuario} ${cuenta.email || ""} ${etiquetaRol}`.toLowerCase();
+    if (busqueda && !contenidoBusqueda.includes(busqueda)) return;
+    const elemento = document.createElement("li");
+    elemento.className = "fila-gestion";
+    const datos = document.createElement("div");
+    datos.className = "datos-gestion";
+    const nombre = document.createElement("strong");
+    nombre.textContent = cuenta.name || usuario;
+    const detalle = document.createElement("span");
+    detalle.textContent = `${cuenta.email || "Sin correo"} · ${etiquetaRol}`;
+    datos.append(nombre, detalle);
+    const estado = document.createElement("span");
+    estado.className = `estado-tecnico ${cuenta.status || "activo"}`;
+    estado.textContent = cuenta.status === "inactivo" ? "Inactivo" : "Activo";
+    if (permisos.administrarUsuarios) {
+      const acciones = document.createElement("div");
+      acciones.className = "acciones-gestion";
+      const editar = document.createElement("button");
+      editar.type = "button";
+      editar.textContent = "✏️ Editar";
+      editar.addEventListener("click", () => {
+        usuarioEnEdicion = usuario;
+        usuarioNombreInput.value = cuenta.name || usuario;
+        usuarioCorreoInput.value = cuenta.email || "";
+        usuarioRolInput.value = rol;
+        usuarioEstadoInput.value = cuenta.status || "activo";
+        usuarioPasswordInput.value = "";
+        guardarUsuarioBtn.textContent = "💾 Guardar cambios";
+        modoEdicionUsuario.classList.remove("hidden");
+        formularioUsuarios.classList.add("modal-edicion");
+        overlayEdicion.classList.remove("hidden");
+        overlayEdicion.setAttribute("aria-hidden", "false");
+        usuarioNombreInput.focus();
+      });
+      const eliminar = document.createElement("button");
+      eliminar.type = "button";
+      eliminar.textContent = "🗑️ Eliminar";
+      eliminar.addEventListener("click", () => {
+        const actuales = obtenerUsuarios();
+        delete actuales[usuario];
+        guardarUsuarios(actuales);
+        renderizarUsuarios();
+      });
+      acciones.append(editar, eliminar);
+      elemento.append(datos, estado, acciones);
+    } else {
+      elemento.append(datos, estado);
+    }
+    listaUsuarios.append(elemento);
+  });
+}
+
+let usuarioEnEdicion = null;
+
+function actualizarFiltrosReporte() {
+  const opciones = [
+    [reporteTecnicoInput, obtenerTecnicos(), "Todos los técnicos"],
+    [reporteClienteInput, obtenerClientes(), "Todos los clientes"]
+  ];
+  opciones.forEach(([selector, registros, texto]) => {
+    const valorActual = selector.value;
+    selector.innerHTML = `<option value="todos">${texto}</option>`;
+    registros.forEach((registro) => {
+      const opcion = document.createElement("option");
+      opcion.value = registro.nombre;
+      opcion.textContent = registro.nombre;
+      selector.append(opcion);
+    });
+    selector.value = [...selector.options].some((opcion) => opcion.value === valorActual) ? valorActual : "todos";
+  });
+}
+
+function crearEstadoVisual(estado) {
+  const etiqueta = document.createElement("span");
+  const estadoNormalizado = estado || "pendiente";
+  etiqueta.className = `estado-texto ${estadoNormalizado}`;
+  etiqueta.textContent = estadoNormalizado.replace("-", " ");
+  return etiqueta;
+}
+
+function renderizarReportes() {
+  actualizarFiltrosReporte();
+  const desde = reporteFechaInicioInput.value;
+  const hasta = reporteFechaFinInput.value;
+  const tecnicoFiltro = reporteTecnicoInput.value;
+  const clienteFiltro = reporteClienteInput.value;
+  const actividades = obtenerActividades().filter((actividad) => {
+    const tecnicos = obtenerTecnicosDeActividad(actividad);
+    return (!desde || actividad.fecha >= desde)
+      && (!hasta || actividad.fecha <= hasta)
+      && (tecnicoFiltro === "todos" || tecnicos.includes(tecnicoFiltro))
+      && (clienteFiltro === "todos" || actividad.cliente === clienteFiltro);
+  });
+  const estados = { pendiente: 0, procesando: 0, terminada: 0 };
+  actividades.forEach((actividad) => { estados[actividad.estado] = (estados[actividad.estado] || 0) + 1; });
+  resumenReporte.innerHTML = "";
+  [["Total de actividades", actividades.length, "total"], ["Terminadas", estados.terminada || 0, "terminadas"], ["Pendientes", estados.pendiente || 0, "pendientes"], ["En proceso", estados.procesando || 0, "proceso"]].forEach(([titulo, valor, clase]) => {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = `resumen-reporte-item resumen-reporte-${clase}`;
+    const etiqueta = document.createElement("span");
+    etiqueta.textContent = titulo;
+    const cantidad = document.createElement("strong");
+    cantidad.textContent = valor;
+    tarjeta.append(etiqueta, cantidad);
+    resumenReporte.append(tarjeta);
+  });
+  listaReporte.innerHTML = "";
+  sinResultadosReporte.classList.toggle("hidden", actividades.length > 0);
+  actividades.forEach((actividad) => {
+    const fila = document.createElement("tr");
+    [
+      actividad.fecha || "Sin fecha",
+      actividad.texto || "Sin actividad",
+      obtenerTecnicosDeActividad(actividad).join(", ") || "Sin técnico",
+      actividad.cliente || "Sin cliente"
+    ].forEach((valor) => {
+      const celda = document.createElement("td");
+      celda.textContent = valor;
+      fila.append(celda);
+    });
+    const celdaEstado = document.createElement("td");
+    celdaEstado.append(crearEstadoVisual(actividad.estado));
+    fila.append(celdaEstado);
+    listaReporte.append(fila);
+  });
+}
+
+function obtenerActividadesFiltradasReporte() {
+  const desde = reporteFechaInicioInput.value;
+  const hasta = reporteFechaFinInput.value;
+  const tecnicoFiltro = reporteTecnicoInput.value;
+  const clienteFiltro = reporteClienteInput.value;
+  return obtenerActividades().filter((actividad) => {
+    const tecnicos = obtenerTecnicosDeActividad(actividad);
+    return (!desde || actividad.fecha >= desde)
+      && (!hasta || actividad.fecha <= hasta)
+      && (tecnicoFiltro === "todos" || tecnicos.includes(tecnicoFiltro))
+      && (clienteFiltro === "todos" || actividad.cliente === clienteFiltro);
+  });
+}
+
+function exportarReporteCsv() {
+  const actividades = obtenerActividadesFiltradasReporte();
+  const tecnicos = obtenerTecnicos();
+  const clientes = obtenerClientes();
+
+  const escapar = (valor) => `"${String(valor || "").replace(/"/g, '""')}"`;
+
+  const filas = [];
+
+  filas.push(["DATOS DE TÉCNICOS"]);
+  filas.push(["Nombre", "Documento", "Teléfono", "Correo", "Estado"]);
+
+  tecnicos.forEach((tecnico) => {
+    filas.push([
+      tecnico.nombre || "",
+      tecnico.documento || "",
+      tecnico.telefono || "",
+      tecnico.correo || "",
+      tecnico.estado || "activo"
+    ]);
+  });
+
+  filas.push([]);
+  filas.push(["DATOS DE CLIENTES"]);
+  filas.push(["Nombre", "Documento", "Teléfono", "Correo", "Estado"]);
+
+  clientes.forEach((cliente) => {
+    filas.push([
+      cliente.nombre || "",
+      cliente.documento || "",
+      cliente.telefono || "",
+      cliente.correo || "",
+      cliente.estado || "activo"
+    ]);
+  });
+
+  filas.push([]);
+  filas.push(["REPORTE DE ACTIVIDADES"]);
+  filas.push(["Fecha", "Actividad", "Técnico(s)", "Cliente", "Estado"]);
+
+  actividades.forEach((actividad) => {
+    filas.push([
+      actividad.fecha || "Sin fecha",
+      actividad.texto || "Sin actividad",
+      obtenerTecnicosDeActividad(actividad).join(", ") || "Sin técnico",
+      actividad.cliente || "Sin cliente",
+      (actividad.estado || "pendiente").replace("-", " ")
+    ]);
+  });
+
+  const contenido = filas
+    .map((fila) => fila.map(escapar).join(";"))
+    .join("\n");
+
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(
+    new Blob([`\ufeff${contenido}`], {
+      type: "text/csv;charset=utf-8;"
+    })
+  );
+
+  enlace.download = `reporte-actividades-${new Date().toISOString().slice(0, 10)}.csv`;
+  enlace.click();
+  URL.revokeObjectURL(enlace.href);
+}
+
+function renderizarNotificaciones() {
+  if (obtenerConfiguracion().notificaciones === false) {
+    listaNotificaciones.innerHTML = "";
+    contadorNotificaciones.textContent = "0";
+    contadorNotificaciones.classList.add("hidden");
+    sinNotificaciones.textContent = "Las notificaciones están desactivadas en Configuración.";
+    sinNotificaciones.classList.remove("hidden");
+    return;
+  }
+  sinNotificaciones.textContent = "No hay notificaciones.";
+  const notificaciones = [];
+  const hoy = new Date();
+  const formatearFechaClave = (fecha) => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+  const fechaHoy = formatearFechaClave(hoy);
+  const manana = new Date(hoy);
+  manana.setDate(manana.getDate() + 1);
+  const fechaManana = formatearFechaClave(manana);
+
+  obtenerActividades().forEach((actividad) => {
+    const nombre = actividad.texto || "Actividad sin nombre";
+    if (actividad.fecha && actividad.fecha >= fechaHoy && actividad.fecha <= fechaManana) {
+      notificaciones.push({
+        tipo: "proxima",
+        icono: "⏰",
+        destino: "actividades",
+        texto: `Se acerca la actividad: ${nombre} (${actividad.fecha}${actividad.hora ? `, ${formatearHora(actividad.hora)}` : ""})`
+      });
+    }
+    if (actividad.estado !== "terminada") {
+      notificaciones.push({ tipo: "pendiente", icono: "⏳", destino: "actividades", texto: `Actividad no terminada: ${nombre}` });
+    } else {
+      notificaciones.push({ tipo: "terminada", icono: "✅", destino: "actividades", texto: `Actividad terminada: ${nombre}` });
+    }
+  });
+  obtenerProgramaciones().forEach((programacion) => {
+    notificaciones.push({
+      tipo: "programacion",
+      icono: "📅",
+      destino: "programacion",
+      texto: `Programación encontrada: ${programacion.actividad} (${programacion.fechaInicio})`
+    });
+  });
+  listaNotificaciones.innerHTML = "";
+  contadorNotificaciones.textContent = String(notificaciones.length);
+  contadorNotificaciones.classList.remove("hidden");
+  sinNotificaciones.classList.toggle("hidden", notificaciones.length > 0);
+  notificaciones.forEach((notificacion) => {
+    const fila = document.createElement("li");
+    fila.className = `notificacion-${notificacion.tipo}`;
+    fila.tabIndex = 0;
+    fila.setAttribute("role", "button");
+    const icono = document.createElement("span");
+    icono.className = "notificacion-icono";
+    icono.textContent = notificacion.icono;
+    const texto = document.createElement("span");
+    texto.textContent = notificacion.texto;
+    fila.append(icono, texto);
+    const abrirModulo = () => document.querySelector(`.menu-item[data-target="${notificacion.destino}"]`)?.click();
+    fila.addEventListener("click", abrirModulo);
+    fila.addEventListener("keydown", (evento) => {
+      if (evento.key === "Enter" || evento.key === " ") {
+        evento.preventDefault();
+        abrirModulo();
+      }
+    });
+    listaNotificaciones.append(fila);
+  });
+}
+
+function renderizarHistorial() {
+  actualizarFiltrosHistorial();
+  const fechaFiltro = historialFechaInput.value;
+  const tecnicoFiltro = historialTecnicoInput.value;
+  const clienteFiltro = historialClienteInput.value;
+  const estadoFiltro = historialEstadoInput.value;
+  listaHistorial.innerHTML = "";
+  const programaciones = obtenerProgramaciones();
+  const actividades = obtenerActividades().filter((actividad) => {
+    const tecnicos = obtenerTecnicosDeActividad(actividad);
+    const estado = obtenerEstadoHistorial(actividad, programaciones);
+    return (!fechaFiltro || actividad.fecha === fechaFiltro)
+      && (tecnicoFiltro === "todos" || tecnicos.includes(tecnicoFiltro))
+      && (clienteFiltro === "todos" || actividad.cliente === clienteFiltro)
+      && (estadoFiltro === "todos" || estado.clave === estadoFiltro);
+  });
+  sinResultadosHistorial.classList.toggle("hidden", actividades.length > 0);
+  actividades.forEach((actividad) => {
+    const estado = obtenerEstadoHistorial(actividad, programaciones);
+    const fila = document.createElement("tr");
+    [
+      actividad.fecha || "Sin fecha",
+      actividad.texto || "Sin actividad",
+      obtenerTecnicosDeActividad(actividad).join(", ") || "Sin técnico",
+      actividad.cliente || "Sin cliente"
+    ].forEach((valor) => {
+      const celda = document.createElement("td");
+      celda.textContent = valor;
+      fila.append(celda);
+    });
+    const celdaEstado = document.createElement("td");
+    const etiquetaEstado = document.createElement("span");
+    etiquetaEstado.className = `estado-texto historial-estado ${estado.clave}`;
+    etiquetaEstado.textContent = estado.etiqueta;
+    celdaEstado.append(etiquetaEstado);
+    fila.append(celdaEstado);
+    const celdaAccion = document.createElement("td");
+    const accion = document.createElement("button");
+    accion.type = "button";
+    accion.className = `accion-historial accion-historial-${estado.clave === "programada" ? "programacion" : "actividad"}`;
+    accion.textContent = estado.clave === "programada" ? "Ver programación" : "Ver actividad";
+    accion.addEventListener("click", () => {
+      if (estado.clave === "programada") {
+        const programacion = programaciones.find((registro) => registro.actividad === actividad.texto);
+        if (programacion) iniciarEdicionProgramacion(programacion);
+        return;
+      }
+      if (!obtenerPermisosActuales().administrarActividades) {
+        document.querySelector('.menu-item[data-target="actividades"]')?.click();
+        return;
+      }
+      document.querySelector('.menu-item[data-target="actividades"]')?.click();
+      const elementoActividad = [...lista.querySelectorAll("li")].find((elemento) =>
+        elemento.querySelector(".texto-actividad")?.textContent === actividad.texto
+        && elemento.dataset.fecha === actividad.fecha
+        && elemento.dataset.hora === actividad.hora
+      );
+      if (elementoActividad) iniciarEdicion(elementoActividad);
+    });
+    celdaAccion.append(accion);
+    fila.append(celdaAccion);
+    listaHistorial.append(fila);
+  });
+}
+
+function obtenerEstadoHistorial(actividad, programaciones = obtenerProgramaciones()) {
+  if (actividad.estado === "terminada") return { clave: "terminada", etiqueta: "Terminada" };
+  if (actividad.estado === "procesando") return { clave: "procesando", etiqueta: "En proceso" };
+  if (programaciones.some((programacion) => programacion.actividad === actividad.texto)) {
+    return { clave: "programada", etiqueta: "Programada" };
+  }
+  return { clave: "creada", etiqueta: "Actividad creada" };
+}
+
+function actualizarFiltrosHistorial() {
+  [[historialTecnicoInput, obtenerTecnicos(), "Todos los técnicos"], [historialClienteInput, obtenerClientes(), "Todos los clientes"]].forEach(([selector, registros, texto]) => {
+    const valorActual = selector.value;
+    selector.innerHTML = `<option value="todos">${texto}</option>`;
+    registros.forEach((registro) => {
+      const opcion = document.createElement("option");
+      opcion.value = registro.nombre;
+      opcion.textContent = registro.nombre;
+      selector.append(opcion);
+    });
+  
+    selector.value = [...selector.options].some((opcion) => opcion.value === valorActual) ? valorActual : "todos";
+  });
+}
+ 
+
+function obtenerTecnicos() {
+  try {
+    const tecnicos = JSON.parse(localStorage.getItem("tecnicos"));
+    return Array.isArray(tecnicos) ? tecnicos : [];
+  } catch (error){
+    return [];
+    
+  }
+}
+
+
+
+function guardarTecnicos() {
+  const tecnicos = [...listaTecnicos.querySelectorAll("li")].map((tecnico) => ({
+    nombre: tecnico.dataset.nombre || tecnico.querySelector(".nombre-tecnico")?.textContent || "",
+    documento: tecnico.dataset.documento || "",
+    telefono: tecnico.dataset.telefono || "",
+    correo: tecnico.dataset.correo || "",
+    estado: tecnico.dataset.estado || "activo"
+  }));
+
+  localStorage.setItem("tecnicos", JSON.stringify(tecnicos));
+}
+
+
+
+function obtenerClientes() {
+  try {
+    const clientes = JSON.parse(localStorage.getItem("clientes"));
+    return Array.isArray(clientes) ? clientes : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function guardarClientes() {
+  const clientes = [...listaClientes.querySelectorAll("li")].map((cliente) => ({
+    nombre: cliente.dataset.nombre || cliente.querySelector(".nombre-cliente")?.textContent || "",
+    documento: cliente.dataset.documento || "",
+    telefono: cliente.dataset.telefono || "",
+    correo: cliente.dataset.correo || "",
+    estado: cliente.dataset.estado || "activo"
+    
+  }));
+  localStorage.setItem("clientes", JSON.stringify(clientes));
+}
+
+
+function obtenerSedes() {
+
+  try {
+    const sedes = JSON.parse(localStorage.getItem("sedes"));
+    return Array.isArray(sedes) ? sedes : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function guardarSedes() {
+  const sedes = [...listaSedes.querySelectorAll("li")].map((sede) => ({
+    nombre: sede.dataset.nombre || sede.querySelector(".nombre-sede")?.textContent || "",
+    cliente: sede.dataset.cliente || "",
+    direccion: sede.dataset.direccion || "",
+    ciudad: sede.dataset.ciudad || "",
+    estado: sede.dataset.estado || "activo"
+  }));
+  localStorage.setItem("sedes", JSON.stringify(sedes));
+}
+
+function obtenerAliados() {
+  try {
+    const aliados = JSON.parse(localStorage.getItem("aliados"));
+    return Array.isArray(aliados) ? aliados : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function guardarAliados() {
+  const aliados = [...listaAliado.querySelectorAll("li")].map((aliado) => ({
+    nombre: aliado.dataset.nombre || aliado.querySelector(".nombre-aliado")?.textContent || "",
+    documento: aliado.dataset.documento || "",
+    telefono: aliado.dataset.telefono || "",
+    correo: aliado.dataset.correo || "",
+    estado: aliado.dataset.estado || "activo"
+  }));
+  localStorage.setItem("aliados", JSON.stringify(aliados));
+}
+
+function actualizarOpcionesTecnicos() {
+  opcionesTecnicos.innerHTML = "";
+  listaTecnicos.querySelectorAll("li").forEach((tecnico) => {
+    if ((tecnico.dataset.estado || "activo") !== "activo") return;
+
+    const nombreTecnico = tecnico.dataset.nombre || "";
+    const opcion = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = nombreTecnico;
+    opcion.append(checkbox, document.createTextNode(` ${nombreTecnico}`));
+    opcionesTecnicos.append(opcion);
+  });
+}
+
+function crearTecnico(datosTecnico){
+  const tecnico = typeof datosTecnico === "string"
+    ? { nombre: datosTecnico, documento: "", telefono: "", correo: "", estado: "activo" }
+    : { estado: "activo", ...datosTecnico };
+  const nuevoTecnico = document.createElement("li");
+  const nombre = document.createElement("span");
+  nombre.className = "nombre-tecnico";
+  nombre.textContent = tecnico.nombre;
+
+  const datos = document.createElement("div");
+  datos.className = "datos-tecnico";
+  [
+    `Documento: ${tecnico.documento || "Sin registrar"}`,
+    `Tel: ${tecnico.telefono || "Sin registrar"}`,
+    tecnico.correo || "Sin correo"
+  ].forEach((dato) => {
+    const datoTexto = document.createElement("span");
+    datoTexto.textContent = dato;
+    datos.append(datoTexto);
+  });
+
+  const estado = document.createElement("span");
+  estado.className = `estado-tecnico ${tecnico.estado}`;
+  estado.textContent = tecnico.estado === "activo" ? "Activo" : "Inactivo";
+
+  nuevoTecnico.dataset.nombre = tecnico.nombre;
+  nuevoTecnico.dataset.documento = tecnico.documento;
+  nuevoTecnico.dataset.telefono = tecnico.telefono;
+  nuevoTecnico.dataset.correo = tecnico.correo;
+  nuevoTecnico.dataset.estado = tecnico.estado;
+
+  const eliminarBtn = document.createElement("button");
+  eliminarBtn.className = "eliminar-tecnico";
+  eliminarBtn.type = "button";
+  eliminarBtn.textContent = "🗑️ Eliminar";
+  eliminarBtn.title = "Eliminar técnico";
+
+  nuevoTecnico.append(nombre, datos, estado, eliminarBtn);
+  listaTecnicos.append(nuevoTecnico);
+  actualizarOpcionesTecnicos();
+
+  eliminarBtn.addEventListener("click", () => {
+    nuevoTecnico.remove();
+    actualizarOpcionesTecnicos();
+    guardarTecnicos();
+  });
+}
+function actualizarOpcionesClientes() {
+  opcionesClientes.innerHTML = "";
+  listaClientes.querySelectorAll("li").forEach((cliente) => {
+    if ((cliente.dataset.estado || "activo") !== "activo") return;
+
+    const nombreCliente = cliente.dataset.nombre || "";
+    const opcion = document.createElement("button");
+    opcion.type = "button";
+    opcion.className = "opcion-cliente";
+    opcion.textContent = nombreCliente;
+    opcion.addEventListener("click", () => {
+      clienteSeleccionado = nombreCliente;
+      abrirClientesBtn.textContent = nombreCliente;
+      opcionesClientes.hidden = true;
+      abrirClientesBtn.setAttribute("aria-expanded", "false");
+    });
+    opcionesClientes.append(opcion);
+  });
+}
+
+function crearCliente(datosCliente) {
+  const cliente = typeof datosCliente === "string"
+    ? { nombre: datosCliente, documento: "", telefono: "", correo: "", estado: "activo" }
+    : { estado: "activo", ...datosCliente };
+  const nuevoCliente = document.createElement("li");
+  const nombre = document.createElement("span");
+  nombre.className = "nombre-cliente";
+  nombre.textContent = cliente.nombre;
+
+  const datos = document.createElement("div");
+  datos.className = "datos-cliente";
+  [
+    `NIT/documento: ${cliente.documento || "Sin registrar"}`,
+    `Tel: ${cliente.telefono || "Sin registrar"}`,
+    cliente.correo || "Sin correo"
+  ].forEach((dato) => {
+    const datoTexto = document.createElement("span");
+    datoTexto.textContent = dato;
+    datos.append(datoTexto);
+  });
+
+
+  const estado = document.createElement("span");
+  estado.className = `estado-tecnico ${cliente.estado}`;
+  estado.textContent = cliente.estado === "activo" ? "Activo" : "Inactivo";
+
+  nuevoCliente.dataset.nombre = cliente.nombre;
+  nuevoCliente.dataset.documento = cliente.documento;
+  nuevoCliente.dataset.telefono = cliente.telefono;
+  nuevoCliente.dataset.correo = cliente.correo;
+  nuevoCliente.dataset.estado = cliente.estado;
+
+  const eliminarBtn = document.createElement("button");
+  eliminarBtn.className = "eliminar-cliente";
+  eliminarBtn.type = "button";
+  eliminarBtn.textContent = "🗑️ Eliminar";
+  eliminarBtn.title = "Eliminar cliente";
+
+  nuevoCliente.append(nombre, datos, estado, eliminarBtn);
+  listaClientes.append(nuevoCliente);
+  actualizarOpcionesClientes();
+  actualizarClientesDeSede();
+
+  eliminarBtn.addEventListener("click", () => {
+    nuevoCliente.remove();
+    actualizarOpcionesClientes();
+    actualizarClientesDeSede();
+    guardarClientes();
+  });
+}
+function actualizarClientesDeSede() {
+  const clienteActual = clienteSedeInput.value;
+  clienteSedeInput.innerHTML = "";
+  const opcionVacia = document.createElement("option");
+  opcionVacia.value = "";
+  opcionVacia.textContent = "Selecciona un cliente";
+  clienteSedeInput.append(opcionVacia);
+
+  obtenerClientes().forEach((cliente) => {
+    if ((cliente.estado || "activo") !== "activo") return;
+    const opcion = document.createElement("option");
+    opcion.value = cliente.nombre;
+    opcion.textContent = cliente.nombre;
+    clienteSedeInput.append(opcion);
+  });
+
+  if ([...clienteSedeInput.options].some((opcion) => opcion.value === clienteActual)) {
+    clienteSedeInput.value = clienteActual;
+  }
+}
+
+function actualizarOpcionesSedes() {
+  opcionesSedes.innerHTML = "";
+  listaSedes.querySelectorAll("li").forEach((sede) => {
+    if ((sede.dataset.estado || "activo") !== "activo") return;
+    const opcion = document.createElement("button");
+    opcion.type = "button";
+    opcion.className = "opcion-sede";
+    opcion.textContent = sede.dataset.nombre || "";
+    opcion.addEventListener("click", () => {
+      sedeSeleccionada = sede.dataset.nombre || "";
+      abrirSedesBtn.textContent = sedeSeleccionada;
+      opcionesSedes.hidden = true;
+      abrirSedesBtn.setAttribute("aria-expanded", "false");
+    });
+    opcionesSedes.append(opcion);
+  });
+}
+
+function crearSede(datosSede) {
+  const sede = typeof datosSede === "string"
+    ? { nombre: datosSede, cliente: "", direccion: "", ciudad: "", estado: "activo" }
+    : { estado: "activo", ...datosSede };
+  const nuevaSede = document.createElement("li");
+  const nombre = document.createElement("span");
+  nombre.className = "nombre-sede";
+  nombre.textContent = sede.nombre;
+
+  const datos = document.createElement("div");
+  datos.className = "datos-sede";
+  [
+    `Cliente: ${sede.cliente || "Sin cliente"}`,
+    `Dirección: ${sede.direccion || "Sin dirección"}`,
+    `Ciudad: ${sede.ciudad || "Sin ciudad"}`
+  ].forEach((dato) => {
+    const datoTexto = document.createElement("span");
+    datoTexto.textContent = dato;
+    datos.append(datoTexto);
+  });
+
+  const estado = document.createElement("span");
+  estado.className = `estado-tecnico ${sede.estado}`;
+  estado.textContent = sede.estado === "activo" ? "Activo" : "Inactivo";
+
+  nuevaSede.dataset.nombre = sede.nombre;
+  nuevaSede.dataset.cliente = sede.cliente;
+  nuevaSede.dataset.direccion = sede.direccion;
+  nuevaSede.dataset.ciudad = sede.ciudad;
+  nuevaSede.dataset.estado = sede.estado;
+
+  const eliminarBtn = document.createElement("button");
+  eliminarBtn.className = "eliminar-sede";
+  eliminarBtn.type = "button";
+  eliminarBtn.textContent = "🗑️ Eliminar";
+  eliminarBtn.title = "Eliminar sede";
+
+  nuevaSede.append(nombre, datos, estado, eliminarBtn);
+  listaSedes.append(nuevaSede);
+  actualizarOpcionesSedes();
+
+  eliminarBtn.addEventListener("click", () => {
+    nuevaSede.remove();
+    actualizarOpcionesSedes();
+    guardarSedes();
+  });
+}
+function actualizarOpcionesAliados() {
+  opcionesAliados.innerHTML = "";
+  listaAliado.querySelectorAll("li").forEach((aliado) => {
+    if ((aliado.dataset.estado || "activo") !== "activo") return;
+
+    const nombre = aliado.dataset.nombre || "";
+    const opcion = document.createElement("button");
+    opcion.type = "button";
+    opcion.className = "opcion-aliado";
+    opcion.textContent = nombre;
+    opcion.addEventListener("click", () => {
+      aliadoSeleccionado = nombre;
+      abrirAliadosBtn.textContent = nombre;
+      opcionesAliados.hidden = true;
+      abrirAliadosBtn.setAttribute("aria-expanded", "false");
+    });
+    opcionesAliados.append(opcion);
+  });
+}
+
+function crearAliado(datosAliado){
+  const aliado = typeof datosAliado === "string"
+    ? { nombre: datosAliado, documento: "", telefono: "", correo: "", estado: "activo" }
+    : { estado: "activo", ...datosAliado };
+  const nuevoAliado  = document.createElement("li");
+
+  const nombreAliado = document.createElement("span");
+  nombreAliado.className = "nombre-aliado";
+  nombreAliado.textContent = aliado.nombre;
+
+  const datos = document.createElement("div");
+  datos.className = "datos-aliado";
+  [
+    `NIT/documento: ${aliado.documento || "Sin registrar"}`,
+    `Tel: ${aliado.telefono || "Sin registrar"}`,
+    aliado.correo || "Sin correo"
+  ].forEach((dato) => {
+    const datoTexto = document.createElement("span");
+    datoTexto.textContent = dato;
+    datos.append(datoTexto);
+  });
+
+  const estado = document.createElement("span");
+  estado.className = `estado-tecnico ${aliado.estado}`;
+  estado.textContent = aliado.estado === "activo" ? "Activo" : "Inactivo";
+
+  nuevoAliado.dataset.nombre = aliado.nombre;
+  nuevoAliado.dataset.documento = aliado.documento;
+  nuevoAliado.dataset.telefono = aliado.telefono;
+  nuevoAliado.dataset.correo = aliado.correo;
+  nuevoAliado.dataset.estado = aliado.estado;
+
+  const eliminarBtn = document.createElement("button");
+  eliminarBtn.className = "eliminar-aliado";
+  eliminarBtn.type = "button";
+  eliminarBtn.textContent = "🗑️ Eliminar";
+
+  nuevoAliado.append(nombreAliado, datos, estado, eliminarBtn);
+  listaAliado.append (nuevoAliado);
+  actualizarOpcionesAliados();
+
+  eliminarBtn.addEventListener("click",  () => {
+    nuevoAliado.remove ();
+    actualizarOpcionesAliados();
+    guardarAliados();
+  });
+}
+
+
+function actualizarEstado() {
+  const actividades = document.querySelectorAll("#lista li");
+  let pendientes = 0;
+  let enProceso = 0;
+  let terminadas = 0;
+
+  actividades.forEach((actividad) => {
+    const estado = actividad.querySelector(".estado");
+
+    if (estado.classList.contains("pendiente")) pendientes++;
+    if (estado.classList.contains("procesando")) enProceso++;
+    if (estado.classList.contains("terminada")) terminadas++;
+  });
+
+  document.getElementById("total").textContent = pendientes + enProceso + terminadas;
+  document.getElementById("pendientes").textContent = pendientes;
+  document.getElementById("en-proceso").textContent = enProceso;
+  document.getElementById("terminadas").textContent = terminadas;
+
+  const porcentaje = actividades.length ? Math.round((terminadas / actividades.length) * 100) : 0;
+  document.getElementById("porcentajeCompletado").textContent = `${porcentaje}%`;
+  document.getElementById("barraProgreso").style.width = `${porcentaje}%`;
+  document.getElementById("badgePendientes").textContent = pendientes;
+  document.getElementById("resumenProgreso").textContent = actividades.length
+    ? `${terminadas} de ${actividades.length} actividad${actividades.length === 1 ? "" : "es"} completada${terminadas === 1 ? "" : "s"}.`
+    : "Aún no hay actividades registradas.";
+
+  const listaPendientes = document.getElementById("dashboardPendientes");
+  listaPendientes.innerHTML = "";
+  const pendientesVisibles = [...document.querySelectorAll("#lista li")]
+    .filter((actividad) => actividad.querySelector(".estado")?.classList.contains("pendiente"))
+    .slice(0, 5);
+
+  if (!pendientesVisibles.length) {
+    const vacio = document.createElement("li");
+    vacio.className = "empty-pending";
+    vacio.textContent = "No tienes pendientes por ahora.";
+    listaPendientes.append(vacio);
+    return;
+  }
+
+  pendientesVisibles.forEach((actividad) => {
+    const pendiente = document.createElement("li");
+    pendiente.textContent = actividad.querySelector(".texto-actividad")?.textContent || "Actividad pendiente";
+    listaPendientes.append(pendiente);
+  });
+}
+
+function formatearHora(hora) {
+  if (!hora) return "";
+
+  const [horas, minutos] = hora.split(":").map(Number);
+  if (Number.isNaN(horas) || Number.isNaN(minutos)) return hora;
+
+  const fechaHora = new Date(1970, 0, 1, horas, minutos);
+  return fechaHora.toLocaleTimeString("es-CO", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  });
+}
+
+function crearActividad(textoActividad, fechaActividad = "", horaActividad = "", estadoInicial = "pendiente", tecnicosIniciales = "", clienteactividadinicial = "", sedeActividadInicial = "", aliadoActividadInicial = "", observacionesIniciales = "") {
+  const nuevaActividad = document.createElement("li");
+  const texto = document.createElement("span");
+  const estado = document.createElement("span");
+  const estadoBtn = document.createElement("button");
+  const editarBtn = document.createElement("button");
+  const eliminarBtn = document.createElement("button");
+  const detalles = document.createElement("div");
+  const informacion = document.createElement("div");
+
+  const fecha = document.createElement("span");
+  const fechaTexto = document.createElement("span");
+  const horaTexto = document.createElement("span");
+  const tecnico = document.createElement("span");
+  const observaciones = document.createElement("span");
+  observaciones.className = "observaciones-actividad";
+  observaciones.textContent = observacionesIniciales
+    ? `📝 ${observacionesIniciales}`
+    : "📝 Sin observaciones";
+  const tecnicos = Array.isArray(tecnicosIniciales)
+    ? tecnicosIniciales
+    : String(tecnicosIniciales).replace(/^👤\s*/, "").split(",").map((nombre) => nombre.trim()).filter(Boolean);
+  const cliente = document.createElement("span");
+  const sede = document.createElement("span");
+  const aliado = document.createElement("span");
+  cliente.className = "cliente-actividad";
+  cliente.textContent = clienteactividadinicial ? `Cliente: ${clienteactividadinicial}` : "Cliente: sin cliente";
+  sede.className = "sede-actividad";
+  sede.textContent = sedeActividadInicial ? `Sede: ${sedeActividadInicial}` : "Sede: sin sede";
+  aliado.className = "aliado-actividad";
+  aliado.textContent = aliadoActividadInicial ? `Aliado: ${aliadoActividadInicial}` : "Aliado: sin aliado";
+
+  nuevaActividad.dataset.fecha = fechaActividad;
+  nuevaActividad.dataset.hora = horaActividad;
+  nuevaActividad.dataset.tecnicos = tecnicos.join(",");
+  nuevaActividad.dataset.cliente = clienteactividadinicial;
+  nuevaActividad.dataset.sede = sedeActividadInicial;
+  nuevaActividad.dataset.aliado = aliadoActividadInicial;
+  nuevaActividad.dataset.observaciones = observacionesIniciales;
+
+  texto.className = "texto-actividad";
+  texto.textContent = textoActividad;
+  estado.className = `estado ${estadoInicial}`;
+  estadoBtn.className = "estadoBtn";
+  estadoBtn.type = "button";
+  editarBtn.className = "editar";
+  editarBtn.type = "button";
+  editarBtn.textContent = "✏️ Editar";
+  editarBtn.setAttribute("aria-label", "Editar actividad");
+  editarBtn.title = "Editar actividad";
+  eliminarBtn.className = "eliminar";
+  eliminarBtn.type = "button";
+  eliminarBtn.textContent = "🗑️ Eliminar";
+  eliminarBtn.setAttribute("aria-label", "Eliminar actividad");
+  eliminarBtn.title = "Eliminar actividad";
+  tecnico.className = "tecnico-actividad";
+  if (tecnicos.length) {
+    tecnicos.forEach((nombre) => {
+      const icono = document.createElement("span");
+      icono.className = "icono-tecnico";
+      icono.textContent = "👤";
+      icono.title = nombre;
+      tecnico.append(icono);
+    });
+    tecnico.append(document.createTextNode(` ${tecnicos.join(", ")}`));
+  } else {
+    tecnico.textContent = "👤 sin técnico";
+  }
+
+  detalles.className = "detalles-actividad";
+  informacion.className = "informacion-actividad";
+  informacion.append(fecha, tecnico, cliente, sede, aliado, observaciones);
+  detalles.append(texto, informacion);
+  nuevaActividad.append(detalles, estado, estadoBtn, editarBtn, eliminarBtn);
+  lista.append(nuevaActividad);
+
+  fecha.className = "fecha-actividad";
+  fechaTexto.className = "fecha-texto";
+  horaTexto.className = "hora-texto";
+  const fechaSeleccionada = fechaActividad
+    ? new Date(`${fechaActividad}T00:00:00`)
+    : null;
+  horaTexto.textContent = horaActividad ? `⏰ ${formatearHora(horaActividad)}` : "";
+
+  if (fechaSeleccionada && !Number.isNaN(fechaSeleccionada.getTime())) {
+
+    const fechaNueva = fechaSeleccionada.toLocaleDateString("es-CO", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    });
+
+    fechaTexto.textContent = `📅 ${fechaNueva}`;
+  } else if (fechaActividad) {
+    fechaTexto.textContent = `📅 ${fechaActividad}`;
+  } else {
+    fechaTexto.textContent = "📅 sin fecha";
+  }
+  fecha.append(fechaTexto, horaTexto);
+
+
+  let estadoActual = ["pendiente", "procesando", "terminada"].indexOf(estadoInicial);
+  if (estadoActual < 0) estadoActual = 0;
+
+  function actualizarBotones() {
+    const textosEstado = ["🕐 Pendiente", "🔄 En proceso", "✅ Terminada"];
+    const textosBoton = ["🔄 En proceso", "✅ Terminar", "↩️ Reabrir"];
+    estado.textContent = textosEstado[estadoActual];
+    estadoBtn.textContent = textosBoton[estadoActual];
+    estadoBtn.setAttribute("aria-label", textosBoton[estadoActual]);
+    estadoBtn.title = textosBoton[estadoActual];
+    nuevaActividad.classList.toggle("completada", estadoActual === 2);
+  }
+
+  actualizarBotones();
+
+  estadoBtn.addEventListener("click", () => {
+    estadoActual = (estadoActual + 1) % 3;
+    estado.className = `estado ${["pendiente", "procesando", "terminada"][estadoActual]}`;
+    actualizarBotones();
+    actualizarEstado();
+    guardarActividades();
+    aplicarFiltrosActividades();
+  });
+
+  editarBtn.addEventListener("click", (evento) => {
+    evento.preventDefault();
+    evento.stopPropagation();
+    iniciarEdicion(nuevaActividad);
+  });
+
+  eliminarBtn.addEventListener("click", () => {
+    if (actividadEnEdicion === nuevaActividad) cancelarEdicion();
+    nuevaActividad.remove();
+    actualizarEstado();
+    guardarActividades();
+    aplicarFiltrosActividades();
+  });
+}
+
+function iniciarEdicion(actividad) {
+  actividadEnEdicion = actividad;
+  actividadInput.value = actividad.querySelector(".texto-actividad")?.textContent || "";
+  fechaInput.value = actividad.dataset.fecha || "";
+  horaInput.value = actividad.dataset.hora || "";
+  estadoEdicionInput.value = actividad.querySelector(".estado")?.classList[1] || "pendiente";
+  observacionesActividad.value = actividad.dataset.observaciones || "";
+  clienteSeleccionado = actividad.dataset.cliente || "";
+  sedeSeleccionada = actividad.dataset.sede || "";
+  aliadoSeleccionado = actividad.dataset.aliado || "";
+  abrirClientesBtn.textContent = clienteSeleccionado || "Selecciona un cliente";
+  abrirSedesBtn.textContent = sedeSeleccionada || "Selecciona una sede";
+  abrirAliadosBtn.textContent = aliadoSeleccionado || "Selecciona un aliado";
+
+  const tecnicosSeleccionados = (actividad.dataset.tecnicos || "").split(",").filter(Boolean);
+  opcionesTecnicos.querySelectorAll("input").forEach((opcion) => {
+    opcion.checked = tecnicosSeleccionados.includes(opcion.value);
+  });
+  actualizarTextoSelector();
+  agregarBtn.textContent = "💾 Guardar cambios";
+  cancelarEdicionBtn.classList.remove("hidden");
+  modoEdicionActividad.classList.remove("hidden");
+  formularioActividad.classList.add("modal-edicion");
+  overlayEdicion.classList.remove("hidden");
+  overlayEdicion.setAttribute("aria-hidden", "false");
+  actividadInput.focus();
+  actividad.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function obtenerTecnicosDeActividad(actividad) {
+  if (Array.isArray(actividad.tecnicos)) return actividad.tecnicos;
+  if (actividad.tecnicos) return String(actividad.tecnicos).split(",").map((nombre) => nombre.trim());
+  if (actividad.tecnico) return [actividad.tecnico];
+  return [];
+}
+
+function tecnicoDisponible(tecnico, fecha, hora, actividadIgnorada = null) {
+  if (!tecnico || !fecha || !hora) return true;
+
+  const nuevaFechaHora = new Date(`${fecha}T${hora}`);
+  if (Number.isNaN(nuevaFechaHora.getTime())) return true;
+
+  return !obtenerActividades().some((actividad) => {
+    if (actividadIgnorada
+      && actividad.texto === actividadIgnorada.querySelector(".texto-actividad")?.textContent
+      && actividad.fecha === actividadIgnorada.dataset.fecha
+      && actividad.hora === actividadIgnorada.dataset.hora) return false;
+    if (actividad.fecha !== fecha || !actividad.hora) return false;
+    if (!obtenerTecnicosDeActividad(actividad).includes(tecnico)) return false;
+
+    const actividadFechaHora = new Date(`${actividad.fecha}T${actividad.hora}`);
+    const diferenciaHoras = Math.abs(nuevaFechaHora - actividadFechaHora) / (1000 * 60 * 60);
+    return diferenciaHoras < 2;
+  });
+}
+
+function agregarActividad() {
+
+  const actividad = actividadInput.value.trim();
+  const tecnicos = [...opcionesTecnicos.querySelectorAll("input:checked")]
+    .map((opcion) => opcion.value);
+  const cliente = clienteSeleccionado;
+  const sede = sedeSeleccionada;
+  const aliado = aliadoSeleccionado;
+  const fecha = fechaInput.value;
+  const hora = horaInput.value;
+  const observaciones = observacionesActividad.value.trim();
+
+  if (!actividad) {
+    alert("Escribe una actividad primero.");
+    actividadInput.focus();
+    return;
+  }
+
+  if (!fecha || !hora) {
+    alert("Selecciona la fecha y la hora de la actividad.");
+    fechaInput.focus();
+    return;
+  }
+
+  const tecnicosOcupados = tecnicos.filter((tecnico) => !tecnicoDisponible(tecnico, fecha, hora, actividadEnEdicion));
+  if (tecnicosOcupados.length) {
+    alert(`El técnico ${tecnicosOcupados.join(", ")} ya tiene una actividad en ese horario. Deben pasar mínimo 2 horas.`);
+    return;
+  }
+
+  const estado = estadoEdicionInput.value || "pendiente";
+  if (actividadEnEdicion) actividadEnEdicion.remove();
+  enviarActividadAlBackend();
+  crearActividad(actividad, fecha, hora, estado, tecnicos, cliente, sede, aliado, observaciones);
+  cancelarEdicion();
+  actividadInput.focus();
+  actualizarEstado();
+  guardarActividades();
+  aplicarFiltrosActividades();
+}
+
+
+async function enviarActividadAlBackend() {
+  try {
+    const actividad = actividadInput.value.trim();
+    const tecnicos = [...opcionesTecnicos.querySelectorAll("input:checked")]
+      .map((opcion) => opcion.value);
+
+    const datos = {
+      actividad: actividad,
+      tecnico: tecnicos.join(", "),
+      sede: sedeSeleccionada || "",
+      cliente: clienteSeleccionado || "",
+      aliado: aliadoSeleccionado || "",
+      fecha: fechaInput.value,
+      hora: horaInput.value,
+      estado: estadoEdicionInput.value || "pendiente",
+      observaciones: observacionesActividad.value.trim()
+    };
+
+    const respuesta = await fetch(`${API_URL}/actividades`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(datos)
+    });
+
+    if (!respuesta.ok) {
+      console.error("Error al guardar actividad en Laravel:", await respuesta.text());
+      return;
+    }
+
+    console.log("Actividad guardada en Laravel correctamente.");
+  } catch (error) {
+    console.error("Error de conexión con Laravel:", error);
+  }
+}
+
+function actualizarTextoSelector() {
+  const seleccionados = [...opcionesTecnicos.querySelectorAll("input:checked")];
+  abrirTecnicosBtn.textContent = seleccionados.length
+    ? `${seleccionados.length} técnico${seleccionados.length === 1 ? "" : "s"} seleccionado${seleccionados.length === 1 ? "" : "s"}`
+    : "Selecciona uno o varios técnicos";
+}
+
+abrirTecnicosBtn.addEventListener("click", () => {
+  const estaAbierto = !opcionesTecnicos.hidden;
+  opcionesTecnicos.hidden = estaAbierto;
+  abrirTecnicosBtn.setAttribute("aria-expanded", String(!estaAbierto));
+});
+
+opcionesTecnicos.addEventListener("change", actualizarTextoSelector);
+
+abrirClientesBtn.addEventListener("click", () => {
+  const estaAbierto = !opcionesClientes.hidden;
+  opcionesClientes.hidden = estaAbierto;
+  abrirClientesBtn.setAttribute("aria-expanded", String(!estaAbierto));
+});
+
+abrirSedesBtn.addEventListener("click", () => {
+  const estaAbierto = !opcionesSedes.hidden;
+  opcionesSedes.hidden = estaAbierto;
+  abrirSedesBtn.setAttribute("aria-expanded", String(!estaAbierto));
+});
+
+abrirAliadosBtn.addEventListener("click", () => {
+  const estaAbierto = !opcionesAliados.hidden;
+  opcionesAliados.hidden = estaAbierto;
+  abrirAliadosBtn.setAttribute("aria-expanded", String(!estaAbierto));
+});
+
+agregarBtn.addEventListener("click", (evento) => {
+  evento.preventDefault();
+  agregarActividad();
+});
+actividadInput.addEventListener("keydown", (evento) => {
+  if (evento.key === "Enter") agregarActividad();
+});
+
+document.querySelectorAll(".menu-item").forEach((boton) => {
+  boton.addEventListener("click", () => {
+    const target = boton.dataset.target;
+    if (!target) return;
+    if (!obtenerPermisosActuales().modulos.includes(target)) return;
+
+    document.querySelectorAll(".menu-item").forEach((item) => {
+      item.classList.toggle("active", item === boton);
+    });
+    document.querySelectorAll(".module-panel").forEach((panel) => {
+      panel.classList.toggle("active", panel.dataset.modulePanel === target);
+    });
+    if (target === "programacion") renderizarProgramacion();
+    if (target === "configuracion") cargarConfiguracion();
+    if (target === "usuarios") renderizarUsuarios();
+    if (target === "reportes") renderizarReportes();
+    if (target === "notificaciones") renderizarNotificaciones();
+    if (target === "historial") renderizarHistorial();
+  });
+  });
+
+filtros.forEach((filtro) => {
+  filtro.addEventListener("click", () => {
+    filtros.forEach((boton) => boton.classList.remove("activo"));
+    filtro.classList.add("activo");
+
+    const tipo = filtro.dataset.filtro;
+    filtroDashboard = tipo;
+    aplicarFiltrosActividades();
+  });
+});
+
+irProgramacionBtn.addEventListener("click", () => {
+  document.querySelector('.menu-item[data-target="programacion"]').click();
+});
+
+guardarConfiguracionBtn.addEventListener("click", () => {
+  localStorage.setItem("controlDiarioConfiguracion", JSON.stringify({
+    empresaNombre: empresaNombreInput.value.trim(),
+    empresaDocumento: empresaDocumentoInput.value.trim(),
+    empresaCorreo: empresaCorreoInput.value.trim(),
+    empresaTelefono: empresaTelefonoInput.value.trim(),
+    estado: configEstadoInput.value,
+    vista: configVistaInput.value,
+    notificaciones: notificacionesActivadasInput.checked,
+    recordarFiltros: recordarFiltrosInput.checked
+  }));
+  estadoConfiguracion.textContent = "Configuración guardada correctamente.";
+  estadoConfiguracion.style.display = "block";
+  renderizarNotificaciones();
+});
+
+
+guardarUsuarioBtn.addEventListener("click", () => {
+  if (!obtenerPermisosActuales().administrarUsuarios) return;
+  const nombre = usuarioNombreInput.value.trim();
+  const correo = usuarioCorreoInput.value.trim().toLowerCase();
+  const password = usuarioPasswordInput.value;
+  if (!nombre || !correo || (!usuarioEnEdicion && password.length < 6)) {
+    estadoUsuarios.textContent = "Completa nombre, correo y una contraseña de mínimo 6 caracteres.";
+    return;
+  }
+  const usuarios = obtenerUsuarios();
+  const clave = nombre.toLowerCase().replace(/\s+/g, "");
+  const usuarioAnterior = usuarioEnEdicion ? usuarios[usuarioEnEdicion] : null;
+  if (usuarioEnEdicion && usuarioEnEdicion !== clave) delete usuarios[usuarioEnEdicion];
+  usuarios[clave] = {
+    name: nombre,
+    email: correo,
+    role: normalizarRol(usuarioRolInput.value),
+    status: usuarioEstadoInput.value,
+    password: password || usuarioAnterior?.password || "usuario123"
+  };
+  guardarUsuarios(usuarios);
+  usuarioEnEdicion = null;
+  usuarioNombreInput.value = "";
+  usuarioCorreoInput.value = "";
+  usuarioPasswordInput.value = "";
+  usuarioRolInput.value = "user";
+  usuarioEstadoInput.value = "activo";
+  guardarUsuarioBtn.textContent = "➕ Agregar usuario";
+  estadoUsuarios.textContent = "Usuario guardado correctamente.";
+  renderizarUsuarios();
+});
+
+buscarUsuarioBtn.addEventListener("click", renderizarUsuarios);
+buscarUsuarioInput.addEventListener("keydown", (evento) => {
+  if (evento.key === "Enter") renderizarUsuarios();
+});
+
+generarReporteBtn.addEventListener("click", () => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  const actividades = typeof obtenerActividadesFiltradasReporte === "function"
+    ? obtenerActividadesFiltradasReporte()
+    : obtenerActividades();
+
+  const tecnicos = typeof obtenerTecnicos === "function" ? obtenerTecnicos() : [];
+  const clientes = typeof obtenerClientes === "function" ? obtenerClientes() : [];
+
+  const fechaGeneracion = new Date().toLocaleDateString("es-CO");
+
+  let y = 20;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("SEGURIDAD ATEMPI", 105, y, { align: "center" });
+
+  y += 8;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("SEGURIDAD, CON SENTIDO HUMANO", 105, y, { align: "center" });
+
+  y += 12;
+
+  doc.setFontSize(15);
+  doc.setFont("helvetica", "bold");
+  doc.text("REPORTE DE ACTIVIDADES", 105, y, { align: "center" });
+
+  y += 8;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Fecha de generación: ${fechaGeneracion}`, 15, y);
+
+  y += 10;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("DATOS DE TÉCNICOS", 15, y);
+
+  y += 7;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  if (tecnicos.length === 0) {
+    doc.text("No hay técnicos registrados.", 15, y);
+    y += 6;
+  } else {
+    tecnicos.forEach((tecnico) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.text(`Nombre: ${tecnico.nombre || "Sin información"}`, 15, y);
+      y += 5;
+      doc.text(`Documento: ${tecnico.documento || "Sin información"}`, 15, y);
+      y += 5;
+      doc.text(`Teléfono: ${tecnico.telefono || "Sin información"}`, 15, y);
+      y += 5;
+      doc.text(`Correo: ${tecnico.correo || "Sin información"}`, 15, y);
+      y += 5;
+      doc.text(`Estado: ${tecnico.estado || "activo"}`, 15, y);
+      y += 8;
+    });
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("DATOS DE CLIENTES", 15, y);
+
+  y += 7;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  if (clientes.length === 0) {
+    doc.text("No hay clientes registrados.", 15, y);
+    y += 6;
+  } else {
+    clientes.forEach((cliente) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.text(`Nombre: ${cliente.nombre || "Sin información"}`, 15, y);
+      y += 5;
+      doc.text(`Documento: ${cliente.documento || "Sin información"}`, 15, y);
+      y += 5;
+      doc.text(`Teléfono: ${cliente.telefono || "Sin información"}`, 15, y);
+      y += 5;
+      doc.text(`Correo: ${cliente.correo || "Sin información"}`, 15, y);
+      y += 5;
+      doc.text(`Estado: ${cliente.estado || "activo"}`, 15, y);
+      y += 8;
+    });
+  }
+
+  if (y > 255) {
+    doc.addPage();
+    y = 20;
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("DETALLE DE ACTIVIDADES", 15, y);
+
+  y += 8;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  if (actividades.length === 0) {
+    doc.text("No hay actividades para mostrar.", 15, y);
+  } else {
+    actividades.forEach((actividad, indice) => {
+      if (y > 255) {
+        doc.addPage();
+        y = 20;
+      }
+
+      const tecnicosActividad = typeof obtenerTecnicosDeActividad === "function"
+        ? obtenerTecnicosDeActividad(actividad).join(", ")
+        : "Sin técnico";
+
+      const datos = [
+        `Actividad ${indice + 1}`,
+        `Fecha: ${actividad.fecha || "Sin fecha"}`,
+        `Hora: ${actividad.hora || "Sin hora"}`,
+        `Actividad: ${actividad.texto || "Sin actividad"}`,
+        `Técnico(s): ${tecnicosActividad || "Sin técnico"}`,
+        `Cliente: ${actividad.cliente || "Sin cliente"}`,
+        `Sede: ${actividad.sede || "Sin sede"}`,
+        `Estado: ${(actividad.estado || "pendiente").replace("-", " ")}`,
+        `Observaciones: ${actividad.observaciones || "Sin observaciones"}`
+      ];
+
+      datos.forEach((linea) => {
+        const lineas = doc.splitTextToSize(linea, 180);
+
+        if (y + lineas.length * 5 > 275) {
+          doc.addPage();
+          y = 20;
+        }
+
+        doc.text(lineas, 15, y);
+        y += lineas.length * 5;
+      });
+
+      y += 4;
+    });
+  }
+
+  const paginas = doc.internal.getNumberOfPages();
+
+  for (let pagina = 1; pagina <= paginas; pagina++) {
+    doc.setPage(pagina);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      `Seguridad Atempi - Reporte de actividades | Página ${pagina} de ${paginas}`,
+      105,
+      290,
+      { align: "center" }
+    );
+  }
+
+  doc.save(`reporte-actividades-${new Date().toISOString().slice(0, 10)}.pdf`);
+});
+
+cancelarEdicionProgramacionBtn.addEventListener("click", cancelarEdicionProgramacion);
+overlayEdicion.addEventListener("click", cancelarEdicionProgramacion);
+
+buscarActividadInput.addEventListener("input", aplicarFiltrosActividades);
+filtroEstadoActividad.addEventListener("change", aplicarFiltrosActividades);
+filtroFechaActividad.addEventListener("change", aplicarFiltrosActividades);
+limpiarFiltrosActividadBtn.addEventListener("click", () => {
+  buscarActividadInput.value = "";
+  filtroEstadoActividad.value = "todos";
+  filtroFechaActividad.value = "";
+  aplicarFiltrosActividades();
+});
+cancelarEdicionBtn.addEventListener("click", cancelarEdicion);
+overlayEdicion.addEventListener("click", cancelarEdicion);
+
+obtenerActividades().forEach((actividad) => {
+  crearActividad(actividad.texto, actividad.fecha, actividad.hora, actividad.estado, actividad.tecnicos || actividad.tecnico, actividad.cliente, actividad.sede, actividad.aliado, actividad.observaciones);
+});
+obtenerTecnicos().forEach((tecnico) => {
+  crearTecnico(tecnico);
+});
+obtenerClientes().forEach((cliente) => {
+  crearCliente(cliente);
+});
+actualizarClientesDeSede();
+obtenerSedes().forEach((sede) => {
+  crearSede(sede);
+});
+obtenerAliados().forEach((aliado) => {
+  crearAliado(aliado);
+});
+
+document.querySelector('[data-filtro="todos"]').classList.add("activo");
+actualizarEstado();
+aplicarFiltrosActividades();
+renderizarProgramacion();
+cargarConfiguracion();
+renderizarUsuarios();
+renderizarReportes();
+renderizarNotificaciones();
+renderizarHistorial();
+setInterval(renderizarNotificaciones, 60000);
+mostrarAppSegunRol();
+
+ agregarTecnicoBtn.addEventListener("click", () => {
+  const nombreTecnico = tecnicoinput.value.trim();
+  const documento = documentoTecnicoInput.value.trim();
+  const telefono = telefonoTecnicoInput.value.trim();
+  const correo = correoTecnicoInput.value.trim().toLowerCase();
+  const estado = estadoTecnicoInput.value;
+
+  if (!nombreTecnico || !documento || !telefono || !correo) {
+    alert("Complete todos los datos del técnico.");
+    tecnicoinput.focus();
+    return;
+  }
+  const tecnicosRegistrados = obtenerTecnicos();
+  if (tecnicosRegistrados.some((tecnico) => tecnico.documento === documento)) {
+    alert("Ya existe un técnico con ese documento.");
+    documentoTecnicoInput.focus();
+    return;
+  }
+  if (tecnicosRegistrados.some((tecnico) => tecnico.correo?.toLowerCase() === correo)) {
+    alert("Ya existe un técnico con ese correo.");
+    correoTecnicoInput.focus();
+    return;
+  }
+  crearTecnico({ nombre: nombreTecnico, documento, telefono, correo, estado });
+  tecnicoinput.value = "";
+  documentoTecnicoInput.value = "";
+  telefonoTecnicoInput.value = "";
+  correoTecnicoInput.value = "";
+  estadoTecnicoInput.value = "activo";
+  tecnicoinput.focus();
+  const datosTecnicoBackend = {
+    nombre: nombreTecnico,
+    documento,
+    telefono,
+    correo,
+    estado
+  };
+
+  guardarTecnicos();
+
+  fetch(`${API_URL}/tecnicos`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify(datosTecnicoBackend)
+  }).then(async (respuesta) => {
+    if (!respuesta.ok) {
+      console.error("Error al guardar técnico en Laravel:", await respuesta.text());
+    }
+  }).catch((error) => {
+    console.error("Error de conexión con Laravel:", error);
+  });
+});
+agregarClienteBtn.addEventListener("click", () => {
+  const nombreCliente = clienteInput.value.trim();
+  const documento = documentoClienteInput.value.trim();
+  const telefono = telefonoClienteInput.value.trim();
+  const correo = correoClienteInput.value.trim().toLowerCase();
+  const estado = estadoClienteInput.value;
+  const clientesRegistrados = obtenerClientes();
+
+  if (!nombreCliente || !correo) {
+    alert("Complete el nombre y el correo del cliente.");
+    clienteInput.focus();
+    return;
+  }
+
+  if (documento && clientesRegistrados.some((cliente) => cliente.documento === documento)) {
+    alert("Ya existe un cliente con ese NIT o documento.");
+    documentoClienteInput.focus();
+    return;
+  }
+  if (correo && clientesRegistrados.some((cliente) => cliente.correo?.toLowerCase() === correo)) {
+    alert("Ya existe un cliente con ese correo.");
+    correoClienteInput.focus();
+    return;
+  }
+
+  crearCliente({ nombre: nombreCliente, documento, telefono, correo, estado });
+  clienteInput.value = "";
+  documentoClienteInput.value = "";
+  telefonoClienteInput.value = "";
+  correoClienteInput.value = "";
+  estadoClienteInput.value = "activo";
+  clienteInput.focus();
+  guardarClientes();
+  const datosClienteBackend = { nombre: nombreCliente, documento, telefono, correo, estado };  fetch(API_URL + "/clientes", { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: JSON.stringify(datosClienteBackend) }).then(async (respuesta) => { if (!respuesta.ok) { alert("Error al guardar cliente: " + await respuesta.text()); } }).catch((error) => alert("Error de conexión: " + error));
+});
+agregarSedeBtn.addEventListener("click", () => {
+  const nombreSede = sedeInput.value.trim();
+  const cliente = clienteSedeInput.value;
+  const direccion = direccionSedeInput.value.trim();
+  const ciudad = ciudadSedeInput.value.trim();
+  const estado = estadoSedeInput.value;
+  const sedesRegistradas = obtenerSedes();
+
+  if (!nombreSede || !cliente || !direccion || !ciudad) {
+    alert("Complete el nombre, cliente, dirección y ciudad de la sede.");
+    sedeInput.focus();
+    return;
+  }
+
+  if (sedesRegistradas.some((sede) => sede.nombre?.toLowerCase() === nombreSede.toLowerCase())) {
+    alert("Ya existe una sede con ese nombre.");
+    sedeInput.focus();
+    return;
+  }
+
+  crearSede({ nombre: nombreSede, cliente, direccion, ciudad, estado });
+  const datosSedeBackend = {
+  nombre: nombreSede,
+  cliente,
+  direccion,
+  ciudad,
+  estado
+};
+
+fetch(API_URL + "/sedes", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+  },
+  body: JSON.stringify(datosSedeBackend)
+}).then(async (respuesta) => {
+  if (!respuesta.ok) {
+    alert("Error al guardar sede: " + await respuesta.text());
+  }
+}).catch((error) => {
+  alert("Error de conexión: " + error);
+});
+  sedeInput.value = "";
+  clienteSedeInput.value = "";
+  direccionSedeInput.value = "";
+  ciudadSedeInput.value = "";
+  estadoSedeInput.value = "activo";
+  sedeInput.focus();
+  guardarSedes();
+});
+
+agregarAliado.addEventListener("click", () => {
+  const nombre = aliadoInput.value.trim();
+  const documento = documentoAliadoInput.value.trim();
+  const telefono = telefonoAliadoInput.value.trim();
+  const correo = correoAliadoInput.value.trim().toLowerCase();
+  const estado = estadoAliadoInput.value;
+  const aliadosRegistrados = obtenerAliados();
+
+  if (!nombre || !documento || !telefono || !correo) {
+    alert("Complete todos los datos del aliado.");
+    aliadoInput.focus();
+    return;
+  }
+
+
+  if (aliadosRegistrados.some((aliado) => aliado.documento === documento)) {
+    alert("Ya existe un aliado con ese NIT o documento.");
+    documentoAliadoInput.focus();
+    return;
+  }
+  if (aliadosRegistrados.some((aliado) => aliado.correo?.toLowerCase() === correo)) {
+    alert("Ya existe un aliado con ese correo.");
+    correoAliadoInput.focus();
+    return;
+  }
+
+  crearAliado({ nombre, documento, telefono, correo, estado });
+  aliadoInput.value = "";
+  documentoAliadoInput.value = "";
+  telefonoAliadoInput.value = "";
+  correoAliadoInput.value = "";
+  estadoAliadoInput.value = "activo";
+  aliadoInput.focus();
+  guardarAliados();
+
+  const datosAliadoBackend = { nombre, documento, telefono, correo, estado };
+
+  fetch(API_URL + "/aliados", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify(datosAliadoBackend)
+  }).then(async (respuesta) => {
+    if (!respuesta.ok) {
+      alert("Error al guardar aliado: " + await respuesta.text());
+    }
+  }).catch((error) => alert("Error de conexión: " + error));
+});
+
+let notificacionesRecordatorio = new Set();
+
+function reproducirSonidoNotificacion() {
+  try {
+    const contexto = new (window.AudioContext || window.webkitAudioContext)();
+    const oscilador = contexto.createOscillator();
+    const ganancia = contexto.createGain();
+
+    oscilador.type = "sine";
+    oscilador.frequency.setValueAtTime(880, contexto.currentTime);
+    oscilador.frequency.setValueAtTime(660, contexto.currentTime + 0.15);
+
+    ganancia.gain.setValueAtTime(0.25, contexto.currentTime);
+    ganancia.gain.exponentialRampToValueAtTime(
+      0.001,
+      contexto.currentTime + 0.5
+    );
+
+    oscilador.connect(ganancia);
+    ganancia.connect(contexto.destination);
+
+    oscilador.start();
+    oscilador.stop(contexto.currentTime + 0.5);
+  } catch (error) {
+    console.log("No se pudo reproducir el sonido.");
+  }
+}
+
+function mostrarRecordatorio(mensaje) {
+  reproducirSonidoNotificacion();
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("🔔 Control Diario", {
+      body: mensaje
+    });
+  }
+
+  alert(`🔔 ${mensaje}`);
+
+  if (typeof renderizarNotificaciones === "function") {
+    renderizarNotificaciones();
+  }
+}
+
+function revisarRecordatorios() {
+  const ahora = new Date();
+
+  const actividades = typeof obtenerActividades === "function"
+    ? obtenerActividades()
+    : [];
+
+  const programaciones = typeof obtenerProgramaciones === "function"
+    ? obtenerProgramaciones()
+    : [];
+
+  actividades.forEach((actividad) => {
+    if (!actividad.fecha || !actividad.hora) return;
+    if (actividad.estado === "terminada") return;
+
+    const fechaHora = new Date(`${actividad.fecha}T${actividad.hora}`);
+    const diferencia = fechaHora.getTime() - ahora.getTime();
+
+    
+    if (diferencia <= 10 * 60 * 1000 && diferencia > -60 * 1000) {
+      const id = `actividad-${actividad.id || actividad.texto}-${actividad.fecha}-${actividad.hora}`;
+
+      if (!notificacionesRecordatorio.has(id)) {
+        notificacionesRecordatorio.add(id);
+
+        mostrarRecordatorio(
+          `La actividad "${actividad.texto || "Sin nombre"}" está próxima.`
+        );
+      }
+    }
+  });
+
+  programaciones.forEach((programacion) => {
+    if (!programacion.fecha || !programacion.hora) return;
+
+    const fechaHora = new Date(`${programacion.fecha}T${programacion.hora}`);
+    const diferencia = fechaHora.getTime() - ahora.getTime();
+
+    if (diferencia <= 10 * 60 * 1000 && diferencia > -60 * 1000) {
+      const id = `programacion-${programacion.id || programacion.actividad}-${programacion.fecha}-${programacion.hora}`;
+
+      if (!notificacionesRecordatorio.has(id)) {
+        notificacionesRecordatorio.add(id);
+
+        mostrarRecordatorio(
+          `La programación "${programacion.actividad || "Sin nombre"}" está próxima.`
+        );
+      }
+    }
+  });
+}
+
+
+setInterval(revisarRecordatorios, 60 * 1000);
+
+
+setTimeout(revisarRecordatorios, 2000);
+
+
+if ("Notification" in window && Notification.permission === "default") {
+  Notification.requestPermission();
+}
+cat >> app.js <<'EOF'
+
+
+   //MEJORA DEL MODULO PROGRAMACIONES
+
+  
+function guardarProgramacionCompleta(programacion) {
+  const programaciones = typeof obtenerProgramaciones === "function"
+    ? obtenerProgramaciones()
+    : [];
+
+  const nuevaProgramacion = {
+    id: programacion.id || Date.now(),
+    actividad: programacion.actividad || programacion.texto || "",
+    tecnico: programacion.tecnico || "",
+    cliente: programacion.cliente || "",
+    sede: programacion.sede || "",
+    fecha: programacion.fecha || "",
+    hora: programacion.hora || "",
+    estado: programacion.estado || "programada",
+    observaciones: programacion.observaciones || ""
+  };
+
+  programaciones.push(nuevaProgramacion);
+
+  localStorage.setItem(
+    "programaciones",
+    JSON.stringify(programaciones)
+  );
+
+  if (typeof renderizarNotificaciones === "function") {
+    renderizarNotificaciones();
+  }
+
+  return nuevaProgramacion;
+}
+
+function obtenerProgramacionesCompletas() {
+  try {
+    const programaciones = JSON.parse(
+      localStorage.getItem("programaciones")
+    );
+
+    return Array.isArray(programaciones)
+      ? programaciones
+      : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function eliminarProgramacion(id) {
+  const programaciones = obtenerProgramacionesCompletas();
+
+  const actualizadas = programaciones.filter(
+    (programacion) => String(programacion.id) !== String(id)
+  );
+
+  localStorage.setItem(
+    "programaciones",
+    JSON.stringify(actualizadas)
+  );
+
+  if (typeof renderizarNotificaciones === "function") {
+    renderizarNotificaciones();
+  }
+}
+
+EOF
+
+   //CAMBIOS EN USUARIOS Y PERMISOS
+
+  
+const ROLES_CONTROL_DIARIO = {
+  administrador: {
+    nombre: "Administrador",
+    permisos: [
+      "dashboard",
+      "actividades",
+      "programacion",
+      "tecnicos",
+      "clientes",
+      "sedes",
+      "aliados",
+      "notificaciones",
+      "reportes",
+      "historial",
+      "usuarios",
+      "configuracion"
+    ]
+  },
+
+  coordinador: {
+    nombre: "Coordinador",
+    permisos: [
+      "dashboard",
+      "actividades",
+      "programacion",
+      "tecnicos",
+      "clientes",
+      "sedes",
+      "aliados",
+      "notificaciones",
+      "reportes",
+      "historial"
+    ]
+  },
+
+  tecnico: {
+    nombre: "Técnico",
+    permisos: [
+      "dashboard",
+      "actividades",
+      "programacion",
+      "notificaciones",
+      "historial"
+    ]
+  },
+
+  consulta: {
+    nombre: "Consulta",
+    permisos: [
+      "dashboard",
+      "notificaciones",
+      "reportes",
+      "historial"
+    ]
+  }
+};
+
+function obtenerRolUsuarioActual() {
+  return localStorage.getItem("rolUsuarioActual") || "administrador";
+}
+
+function establecerRolUsuarioActual(rol) {
+  if (!ROLES_CONTROL_DIARIO[rol]) {
+    console.warn("Rol no válido:", rol);
+    return false;
+  }
+
+  localStorage.setItem("rolUsuarioActual", rol);
+  return true;
+}
+
+function usuarioTienePermiso(modulo) {
+  const rol = obtenerRolUsuarioActual();
+  const configuracion = ROLES_CONTROL_DIARIO[rol];
+
+  if (!configuracion) return false;
+
+  return configuracion.permisos.includes(modulo);
+}
+
+function obtenerNombreRolActual() {
+  const rol = obtenerRolUsuarioActual();
+  return ROLES_CONTROL_DIARIO[rol]?.nombre || "Administrador";
+}
+
+
